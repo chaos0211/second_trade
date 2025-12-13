@@ -1,4 +1,3 @@
-
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 
@@ -12,9 +11,8 @@ class User(AbstractUser):
 
     # 角色类型：可以根据论文需要描述为买家/卖家/双重角色
     ROLE_CHOICES = (
-        ("buyer", "普通买家"),
-        ("seller", "普通卖家"),
-        ("admin", "买家 & 卖家"),
+        ("user", "普通用户"),
+        ("admin", "管理员"),
     )
 
     # 基础扩展信息
@@ -39,7 +37,7 @@ class User(AbstractUser):
     role = models.CharField(
         max_length=10,
         choices=ROLE_CHOICES,
-        default="buyer",
+        default="user",
         help_text="用户在平台中的角色类型",
     )
 
@@ -51,7 +49,7 @@ class User(AbstractUser):
     balance = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        default=0.00,
+        default=10000.00,
         help_text="平台账户余额，用于收款 / 退款等",
     )
     trade_count = models.PositiveIntegerField(
@@ -67,11 +65,11 @@ class User(AbstractUser):
 
     # 简单的实名/安全扩展（可选，用于论文描述“安全性设计”）
     is_email_verified = models.BooleanField(
-        default=False,
+        default=True,
         help_text="邮箱是否已通过验证",
     )
     is_phone_verified = models.BooleanField(
-        default=False,
+        default=True,
         help_text="手机号是否已通过验证",
     )
 

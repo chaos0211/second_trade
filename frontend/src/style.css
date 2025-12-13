@@ -1,6 +1,25 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #165DFF;
+  --color-secondary: #36BFFA;
+  --color-success: #00B42A;
+  --color-warning: #FF7D00;
+  --color-danger: #F53F3F;
+
+  --color-dark: #1D2129;
+  --color-dark-2: #4E5969;
+
+  --color-light-1: #C9CDD4;
+  --color-light-2: #F2F3F5;
+  --color-light-3: #F7F8FA;
+
+  --color-credit-high: #00B42A;
+  --color-credit-medium: #FF7D00;
+
+  --font-inter: Inter, system-ui, sans-serif;
+}
+
 
 /*
   Global custom utilities + animations migrated from a.html

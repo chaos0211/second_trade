@@ -6,10 +6,7 @@
     <!-- Logo -->
     <div class="flex items-center justify-center h-16 border-b border-light-2">
       <div class="flex items-center space-x-2">
-        <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-          <i class="fas fa-mobile-alt text-white text-xl"></i>
-        </div>
-        <span class="text-xl font-bold text-dark" :class="collapsed ? 'hidden' : ''">易机淘</span>
+        <span class="text-xl font-bold text-dark" :class="collapsed ? 'hidden' : ''">二手电子产品交易中心</span>
       </div>
     </div>
 
@@ -35,25 +32,31 @@
     <nav class="flex-1 overflow-y-auto scrollbar-hide py-4">
       <ul class="px-2">
         <li class="mb-1">
-          <a
-            href="javascript:void(0);"
-            class="flex items-center space-x-3 py-3 rounded-lg bg-light-3 text-primary group transition-all duration-200"
-            :class="collapsed ? 'justify-center px-2' : 'px-4'"
+          <RouterLink
+            to="/"
+            class="flex items-center space-x-3 py-3 rounded-lg group transition-all duration-200"
+            :class="[
+              collapsed ? 'justify-center px-2' : 'px-4',
+              isMarket ? 'bg-light-3 text-primary' : 'text-dark-2 hover:bg-light-3'
+            ]"
           >
             <i class="fas fa-th-large w-5 text-center"></i>
             <span :class="collapsed ? 'hidden' : ''">市场大厅</span>
-          </a>
+          </RouterLink>
         </li>
 
         <li class="mb-1" v-for="item in menus" :key="item.text">
-          <a
-            href="javascript:void(0);"
-            class="flex items-center space-x-3 py-3 rounded-lg text-dark-2 group transition-all duration-200 hover:bg-light-3"
-            :class="collapsed ? 'justify-center px-2' : 'px-4'"
+          <RouterLink
+            :to="item.to"
+            class="flex items-center space-x-3 py-3 rounded-lg group transition-all duration-200"
+            :class="[
+              collapsed ? 'justify-center px-2' : 'px-4',
+              isActive(item.to) ? 'bg-light-3 text-primary' : 'text-dark-2 hover:bg-light-3'
+            ]"
           >
             <i :class="item.icon + ' w-5 text-center'"></i>
             <span :class="collapsed ? 'hidden' : ''">{{ item.text }}</span>
-          </a>
+          </RouterLink>
         </li>
       </ul>
     </nav>
@@ -73,14 +76,24 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
+import { useRoute } from "vue-router";
+
 defineProps<{ collapsed: boolean }>();
 defineEmits<{ (e: "toggle"): void }>();
 
 const menus = [
-  { icon: "fas fa-tag", text: "我要卖机" },
-  { icon: "fas fa-shopping-cart", text: "订单中心" },
-  { icon: "fas fa-user-circle", text: "个人中心" },
-  { icon: "fas fa-shield-alt", text: "我的信用" },
-  { icon: "fas fa-cog", text: "设置" },
+  { icon: "fas fa-tag", text: "我要卖机", to: "/seller" },
+  { icon: "fas fa-shopping-cart", text: "订单中心", to: "/orders" },
+  { icon: "fas fa-user-circle", text: "个人中心", to: "/profile" },
+  { icon: "fas fa-cog", text: "系统管理", to: "/admin" },
 ];
+
+const route = useRoute();
+
+const isMarket = computed(() => route.path === "/");
+
+function isActive(prefix: string) {
+  return route.path === prefix || route.path.startsWith(prefix + "/");
+}
 </script>

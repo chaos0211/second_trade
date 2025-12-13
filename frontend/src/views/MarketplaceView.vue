@@ -1,6 +1,5 @@
 <template>
-  <DefaultLayout>
-    <div class="animate-fade-in">
+  <div class="animate-fade-in">
       <!-- 标题区 -->
       <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
         <div>
@@ -24,13 +23,11 @@
       <Pagination class="mt-8" />
 
       <ProductModal v-model:open="modalOpen" :product="activeProduct" />
-    </div>
-  </DefaultLayout>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from "vue";
-import DefaultLayout from "@/layouts/DefaultLayout.vue";
 import FilterBar from "@/components/marketplace/FilterBar.vue";
 import ProductGrid from "@/components/marketplace/ProductGrid.vue";
 import ProductModal from "@/components/common/ProductModal.vue";
