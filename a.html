@@ -1,0 +1,1437 @@
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>二手电子设备交易平台</title>
+    <script src="https://res.gemcoder.com/js/reload.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: '#165DFF',
+              secondary: '#36BFFA',
+              success: '#00B42A',
+              warning: '#FF7D00',
+              danger: '#F53F3F',
+              dark: '#1D2129',
+              'dark-2': '#4E5969',
+              'light-1': '#C9CDD4',
+              'light-2': '#F2F3F5',
+              'light-3': '#F7F8FA',
+              'credit-high': '#00B42A',
+              'credit-medium': '#FF7D00',
+              'credit-low': '#F53F3F'
+            },
+            fontFamily: {
+              inter: ['Inter', 'system-ui', 'sans-serif']
+            },
+            spacing: {
+              '72': '18rem',
+              '80': '20rem',
+              '88': '22rem',
+              '96': '24rem'
+            },
+            boxShadow: {
+              'card': '0 4px 16px rgba(0, 0, 0, 0.08)',
+              'dropdown': '0 6px 20px rgba(0, 0, 0, 0.12)'
+            }
+          }
+        }
+      };
+    </script>
+    <style type="text/tailwindcss">
+      @layer utilities {
+          .content-auto {
+              content-visibility: auto;
+          }
+          .scrollbar-hide {
+              -ms-overflow-style: none;
+              scrollbar-width: none;
+          }
+          .scrollbar-hide::-webkit-scrollbar {
+              display: none;
+          }
+          .text-balance {
+              text-wrap: balance;
+          }
+          .animate-fade-in {
+              animation: fadeIn 0.3s ease-in-out;
+          }
+          .animate-slide-up {
+              animation: slideUp 0.4s ease-out;
+          }
+          .animate-number-scroll {
+              animation: numberScroll 1.5s ease-out forwards;
+          }
+          .wizard-step-active .step-number {
+              @apply bg-primary text-white border-primary;
+          }
+          .wizard-step-active .step-line {
+              @apply bg-primary;
+          }
+          .wizard-step-completed .step-number {
+              @apply bg-primary text-white border-primary;
+          }
+          .wizard-step-completed .step-line {
+              @apply bg-primary;
+          }
+          .wizard-step-completed .step-icon {
+              @apply opacity-100;
+          }
+          .wizard-step-completed .step-text {
+              @apply text-primary;
+          }
+          .tab-active {
+              @apply text-primary border-primary;
+          }
+      }
+      @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+      }
+
+      @keyframes slideUp {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+      }
+
+      @keyframes numberScroll {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+      }
+    </style>
+  </head>
+  <body
+    class="font-inter bg-light-3 text-dark min-h-screen flex overflow-hidden"
+  >
+    <!-- 侧边导航栏 -->
+    <aside
+      id="sidebar"
+      class="w-64 bg-white shadow-lg z-20 flex flex-col transition-all duration-300 ease-in-out"
+    >
+      <!-- 平台Logo -->
+      <div
+        class="flex items-center justify-center h-16 border-b border-light-2"
+      >
+        <div class="flex items-center space-x-2">
+          <div
+            class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center"
+          >
+            <i class="fas fa-mobile-alt text-white text-xl"> </i>
+          </div>
+          <span class="text-xl font-bold text-dark"> 易机淘 </span>
+        </div>
+      </div>
+      <!-- 用户信息 -->
+      <div class="p-4 border-b border-light-2">
+        <div class="flex items-center space-x-3">
+          <img
+            src="https://design.gemcoder.com/staticResource/echoAiSystemImages/4db1f4e22c08cab67f2bb5c522cad076.png"
+            alt="用户头像"
+            class="w-10 h-10 rounded-full object-cover border-2 border-light-2"
+          />
+          <div>
+            <h3 class="font-medium text-dark">张小明</h3>
+            <div class="flex items-center text-xs text-dark-2">
+              <span class="inline-block w-2 h-2 rounded-full bg-success mr-1">
+              </span>
+              <span> 信用良好 </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 导航菜单 -->
+      <nav class="flex-1 overflow-y-auto scrollbar-hide py-4">
+        <ul class="px-2">
+          <li class="mb-1">
+            <a
+              href="javascript:void(0);"
+              class="flex items-center space-x-3 px-4 py-3 rounded-lg bg-light-3 text-primary group transition-all duration-200"
+            >
+              <i class="fas fa-th-large w-5 text-center"> </i>
+              <span> 市场大厅 </span>
+            </a>
+          </li>
+          <li class="mb-1">
+            <a
+              href="javascript:void(0);"
+              class="flex items-center space-x-3 px-4 py-3 rounded-lg text-dark-2 group transition-all duration-200 hover:bg-light-3"
+            >
+              <i class="fas fa-tag w-5 text-center"> </i>
+              <span> 我要卖机 </span>
+            </a>
+          </li>
+          <li class="mb-1">
+            <a
+              href="javascript:void(0);"
+              class="flex items-center space-x-3 px-4 py-3 rounded-lg text-dark-2 group transition-all duration-200 hover:bg-light-3"
+            >
+              <i class="fas fa-shopping-cart w-5 text-center"> </i>
+              <span> 订单中心 </span>
+            </a>
+          </li>
+          <li class="mb-1">
+            <a
+              href="javascript:void(0);"
+              class="flex items-center space-x-3 px-4 py-3 rounded-lg text-dark-2 group transition-all duration-200 hover:bg-light-3"
+            >
+              <i class="fas fa-user-circle w-5 text-center"> </i>
+              <span> 个人中心 </span>
+            </a>
+          </li>
+          <li class="mb-1">
+            <a
+              href="javascript:void(0);"
+              class="flex items-center space-x-3 px-4 py-3 rounded-lg text-dark-2 group transition-all duration-200 hover:bg-light-3"
+            >
+              <i class="fas fa-shield-alt w-5 text-center"> </i>
+              <span> 我的信用 </span>
+            </a>
+          </li>
+          <li class="mb-1">
+            <a
+              href="javascript:void(0);"
+              class="flex items-center space-x-3 px-4 py-3 rounded-lg text-dark-2 group transition-all duration-200 hover:bg-light-3"
+            >
+              <i class="fas fa-cog w-5 text-center"> </i>
+              <span> 设置 </span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+      <!-- 底部帮助 -->
+      <div class="p-4 border-t border-light-2">
+        <a
+          href="javascript:void(0);"
+          class="flex items-center space-x-3 px-4 py-3 rounded-lg text-dark-2 group transition-all duration-200 hover:bg-light-3"
+        >
+          <i class="fas fa-question-circle w-5 text-center"> </i>
+          <span> 帮助中心 </span>
+        </a>
+      </div>
+    </aside>
+    <!-- 主内容区域 -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+      <!-- 顶部导航栏 -->
+      <header
+        class="h-16 bg-white border-b border-light-2 flex items-center justify-between px-6 z-10"
+      >
+        <div class="flex items-center">
+          <button
+            id="sidebar-toggle"
+            class="mr-4 text-dark-2 hover:text-primary transition-colors"
+          >
+            <i class="fas fa-bars text-xl"> </i>
+          </button>
+          <div class="relative">
+            <input
+              type="text"
+              placeholder="搜索..."
+              class="pl-10 pr-4 py-2 rounded-lg border border-light-2 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary w-64 transition-all duration-200"
+            />
+            <i
+              class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-light-1"
+            >
+            </i>
+          </div>
+        </div>
+        <div class="flex items-center space-x-6">
+          <button
+            class="relative text-dark-2 hover:text-primary transition-colors"
+          >
+            <i class="fas fa-bell text-xl"> </i>
+            <span class="absolute top-0 right-0 w-2 h-2 bg-danger rounded-full">
+            </span>
+          </button>
+          <div class="relative group">
+            <button class="flex items-center space-x-2 focus:outline-none">
+              <img
+                src="https://design.gemcoder.com/staticResource/echoAiSystemImages/4db1f4e22c08cab67f2bb5c522cad076.png"
+                alt="用户头像"
+                class="w-8 h-8 rounded-full object-cover border-2 border-light-2"
+              />
+              <span class="hidden md:inline text-sm font-medium"> 张小明 </span>
+              <i
+                class="fas fa-chevron-down text-xs text-light-1 group-hover:text-primary transition-colors"
+              >
+              </i>
+            </button>
+            <!-- 下拉菜单 -->
+            <div
+              class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-dropdown opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50"
+            >
+              <div class="py-2">
+                <a
+                  href="javascript:void(0);"
+                  class="block px-4 py-2 text-sm text-dark-2 hover:bg-light-3 hover:text-primary"
+                >
+                  <i class="fas fa-user mr-2"> </i>
+                  个人资料
+                </a>
+                <a
+                  href="javascript:void(0);"
+                  class="block px-4 py-2 text-sm text-dark-2 hover:bg-light-3 hover:text-primary"
+                >
+                  <i class="fas fa-cog mr-2"> </i>
+                  设置
+                </a>
+                <div class="border-t border-light-2 my-1"></div>
+                <a
+                  href="javascript:void(0);"
+                  class="block px-4 py-2 text-sm text-danger hover:bg-light-3"
+                >
+                  <i class="fas fa-sign-out-alt mr-2"> </i>
+                  退出登录
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+      <!-- 页面内容区域 -->
+      <main class="flex-1 overflow-y-auto bg-light-3 p-6">
+        <!-- [MODULE] abc_主内容区域 -->
+        <!-- [MODULE] d23_市场大厅页面 -->
+        <div id="marketplace-page" class="animate-fade-in">
+          <!-- [MODULE] 33f_市场大厅页面:页面标题 -->
+          <div
+            class="flex flex-col md:flex-row md:items-center md:justify-between mb-6"
+          >
+            <div>
+              <h1 class="text-[clamp(1.5rem,3vw,2rem)] font-bold text-dark">
+                市场大厅
+              </h1>
+              <p class="text-dark-2 mt-1">
+                发现优质二手电子设备，安全交易有保障
+              </p>
+            </div>
+            <div class="mt-4 md:mt-0 flex space-x-3">
+              <button
+                class="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/5 transition-colors"
+              >
+                <i class="fas fa-filter mr-2"> </i>
+                高级筛选
+              </button>
+              <button
+                class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm hover:shadow"
+              >
+                <i class="fas fa-plus mr-2"> </i>
+                我要卖机
+              </button>
+            </div>
+          </div>
+          <!-- [/MODULE] 33f_市场大厅页面:页面标题 -- 包含页面标题、高级筛选按钮和我要卖机按钮 -->
+          <!-- [MODULE] a7d_市场大厅页面:筛选标签 -->
+          <div class="bg-white rounded-xl shadow-card p-4 mb-6">
+            <div class="flex flex-wrap gap-4">
+              <!-- 品牌筛选 -->
+              <div class="w-full md:w-auto">
+                <label class="block text-sm font-medium text-dark-2 mb-1">
+                  品牌
+                </label>
+                <div class="relative">
+                  <select
+                    class="w-full md:w-40 appearance-none bg-light-3 border border-light-2 rounded-lg px-4 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  >
+                    <option value>全部品牌</option>
+                    <option value="apple">Apple</option>
+                    <option value="samsung">Samsung</option>
+                    <option value="huawei">华为</option>
+                    <option value="xiaomi">小米</option>
+                    <option value="oppo">OPPO</option>
+                    <option value="vivo">vivo</option>
+                  </select>
+                  <i
+                    class="fas fa-chevron-down absolute right-3 top-1/2 transform -translate-y-1/2 text-light-1 pointer-events-none"
+                  >
+                  </i>
+                </div>
+              </div>
+              <!-- 成色筛选 -->
+              <div class="w-full md:w-auto">
+                <label class="block text-sm font-medium text-dark-2 mb-1">
+                  成色
+                </label>
+                <div class="relative">
+                  <select
+                    class="w-full md:w-40 appearance-none bg-light-3 border border-light-2 rounded-lg px-4 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  >
+                    <option value>全部成色</option>
+                    <option value="new">全新未拆封</option>
+                    <option value="like-new">99新</option>
+                    <option value="excellent">95新</option>
+                    <option value="good">9成新</option>
+                    <option value="fair">8成新</option>
+                  </select>
+                  <i
+                    class="fas fa-chevron-down absolute right-3 top-1/2 transform -translate-y-1/2 text-light-1 pointer-events-none"
+                  >
+                  </i>
+                </div>
+              </div>
+              <!-- 价格筛选 -->
+              <div class="w-full md:w-auto">
+                <label class="block text-sm font-medium text-dark-2 mb-1">
+                  价格区间
+                </label>
+                <div class="relative">
+                  <select
+                    class="w-full md:w-48 appearance-none bg-light-3 border border-light-2 rounded-lg px-4 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  >
+                    <option value>全部价格</option>
+                    <option value="0-1000">￥0 - ￥1000</option>
+                    <option value="1000-2000">￥1000 - ￥2000</option>
+                    <option value="2000-3000">￥2000 - ￥3000</option>
+                    <option value="3000-5000">￥3000 - ￥5000</option>
+                    <option value="5000+">￥5000以上</option>
+                  </select>
+                  <i
+                    class="fas fa-chevron-down absolute right-3 top-1/2 transform -translate-y-1/2 text-light-1 pointer-events-none"
+                  >
+                  </i>
+                </div>
+              </div>
+              <!-- 排序方式 -->
+              <div class="w-full md:w-auto ml-auto md:ml-0">
+                <label class="block text-sm font-medium text-dark-2 mb-1">
+                  排序方式
+                </label>
+                <div class="relative">
+                  <select
+                    class="w-full md:w-40 appearance-none bg-light-3 border border-light-2 rounded-lg px-4 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  >
+                    <option value="recommend">推荐排序</option>
+                    <option value="price-asc">价格从低到高</option>
+                    <option value="price-desc">价格从高到低</option>
+                    <option value="newest">最新发布</option>
+                    <option value="hottest">最热销量</option>
+                  </select>
+                  <i
+                    class="fas fa-chevron-down absolute right-3 top-1/2 transform -translate-y-1/2 text-light-1 pointer-events-none"
+                  >
+                  </i>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- [/MODULE] a7d_市场大厅页面:筛选标签 -- 包含品牌、成色、价格区间和排序方式的筛选选项 -->
+          <!-- [MODULE] 9f2_市场大厅页面:商品列表 -->
+          <div
+            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+          >
+            <!-- 商品卡片1 -->
+            <div
+              class="bg-white rounded-xl shadow-card overflow-hidden hover:shadow-lg transition-shadow duration-300 group"
+            >
+              <div class="relative">
+                <img
+                  src="https://design.gemcoder.com/staticResource/echoAiSystemImages/4007bd1ba5aaa4f94a23d259b8825262.png"
+                  alt="iPhone 13 Pro"
+                  class="w-full h-48 object-cover"
+                />
+                <div
+                  class="absolute top-3 left-3 bg-success/90 text-white text-xs font-medium px-2 py-1 rounded"
+                >
+                  95新
+                </div>
+                <div
+                  class="absolute top-3 right-3 bg-white/90 text-primary text-xs font-medium px-2 py-1 rounded-full"
+                >
+                  <i class="fas fa-heart mr-1"> </i>
+                  128
+                </div>
+              </div>
+              <div class="p-4">
+                <div class="flex items-center mb-2">
+                  <span
+                    class="text-xs bg-light-2 text-dark-2 px-2 py-1 rounded-full"
+                  >
+                    Apple
+                  </span>
+                  <div class="ml-auto flex items-center">
+                    <i class="fas fa-star text-warning text-xs"> </i>
+                    <span class="text-xs text-dark-2 ml-1"> 4.9 </span>
+                  </div>
+                </div>
+                <h3
+                  class="font-medium text-dark mb-1 group-hover:text-primary transition-colors"
+                >
+                  iPhone 13 Pro 256GB 星光色
+                </h3>
+                <p class="text-sm text-dark-2 mb-3 line-clamp-2">
+                  电池健康：92%，无划痕，原装配件齐全，保修期至2023年12月
+                </p>
+                <div class="flex items-center justify-between">
+                  <div>
+                    <span class="text-lg font-bold text-danger"> ￥5,299 </span>
+                    <span class="text-xs text-light-1 line-through ml-2">
+                      ￥7,999
+                    </span>
+                  </div>
+                  <button
+                    class="bg-primary/10 text-primary p-2 rounded-full hover:bg-primary/20 transition-colors"
+                  >
+                    <i class="fas fa-shopping-cart"> </i>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <!-- 商品卡片2 -->
+            <div
+              class="bg-white rounded-xl shadow-card overflow-hidden hover:shadow-lg transition-shadow duration-300 group"
+            >
+              <div class="relative">
+                <img
+                  src="https://design.gemcoder.com/staticResource/echoAiSystemImages/4837b39dee963da334314082f2c1d4c5.png"
+                  alt="Samsung Galaxy S22 Ultra"
+                  class="w-full h-48 object-cover"
+                />
+                <div
+                  class="absolute top-3 left-3 bg-success/90 text-white text-xs font-medium px-2 py-1 rounded"
+                >
+                  99新
+                </div>
+                <div
+                  class="absolute top-3 right-3 bg-white/90 text-primary text-xs font-medium px-2 py-1 rounded-full"
+                >
+                  <i class="fas fa-heart mr-1"> </i>
+                  86
+                </div>
+              </div>
+              <div class="p-4">
+                <div class="flex items-center mb-2">
+                  <span
+                    class="text-xs bg-light-2 text-dark-2 px-2 py-1 rounded-full"
+                  >
+                    Samsung
+                  </span>
+                  <div class="ml-auto flex items-center">
+                    <i class="fas fa-star text-warning text-xs"> </i>
+                    <span class="text-xs text-dark-2 ml-1"> 4.8 </span>
+                  </div>
+                </div>
+                <h3
+                  class="font-medium text-dark mb-1 group-hover:text-primary transition-colors"
+                >
+                  Galaxy S22 Ultra 512GB 幻影黑
+                </h3>
+                <p class="text-sm text-dark-2 mb-3 line-clamp-2">
+                  电池健康：98%，全套包装，仅激活未使用，保修期内
+                </p>
+                <div class="flex items-center justify-between">
+                  <div>
+                    <span class="text-lg font-bold text-danger"> ￥6,599 </span>
+                    <span class="text-xs text-light-1 line-through ml-2">
+                      ￥9,699
+                    </span>
+                  </div>
+                  <button
+                    class="bg-primary/10 text-primary p-2 rounded-full hover:bg-primary/20 transition-colors"
+                  >
+                    <i class="fas fa-shopping-cart"> </i>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <!-- 商品卡片3 -->
+            <div
+              class="bg-white rounded-xl shadow-card overflow-hidden hover:shadow-lg transition-shadow duration-300 group"
+            >
+              <div class="relative">
+                <img
+                  src="https://design.gemcoder.com/staticResource/echoAiSystemImages/d8beab06c49ad7f00a9c26967fecc5c4.png"
+                  alt="Huawei Mate 40 Pro"
+                  class="w-full h-48 object-cover"
+                />
+                <div
+                  class="absolute top-3 left-3 bg-warning/90 text-white text-xs font-medium px-2 py-1 rounded"
+                >
+                  90新
+                </div>
+                <div
+                  class="absolute top-3 right-3 bg-white/90 text-primary text-xs font-medium px-2 py-1 rounded-full"
+                >
+                  <i class="fas fa-heart mr-1"> </i>
+                  95
+                </div>
+              </div>
+              <div class="p-4">
+                <div class="flex items-center mb-2">
+                  <span
+                    class="text-xs bg-light-2 text-dark-2 px-2 py-1 rounded-full"
+                  >
+                    华为
+                  </span>
+                  <div class="ml-auto flex items-center">
+                    <i class="fas fa-star text-warning text-xs"> </i>
+                    <span class="text-xs text-dark-2 ml-1"> 4.7 </span>
+                  </div>
+                </div>
+                <h3
+                  class="font-medium text-dark mb-1 group-hover:text-primary transition-colors"
+                >
+                  华为 Mate 40 Pro 256GB 秘银色
+                </h3>
+                <p class="text-sm text-dark-2 mb-3 line-clamp-2">
+                  电池健康：88%，轻微使用痕迹，功能完好，无拆修
+                </p>
+                <div class="flex items-center justify-between">
+                  <div>
+                    <span class="text-lg font-bold text-danger"> ￥4,299 </span>
+                    <span class="text-xs text-light-1 line-through ml-2">
+                      ￥7,999
+                    </span>
+                  </div>
+                  <button
+                    class="bg-primary/10 text-primary p-2 rounded-full hover:bg-primary/20 transition-colors"
+                  >
+                    <i class="fas fa-shopping-cart"> </i>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <!-- 商品卡片4 -->
+            <div
+              class="bg-white rounded-xl shadow-card overflow-hidden hover:shadow-lg transition-shadow duration-300 group"
+            >
+              <div class="relative">
+                <img
+                  src="https://design.gemcoder.com/staticResource/echoAiSystemImages/b6cfc8d9e7407bba93ef2fe4fe8097bd.png"
+                  alt="Xiaomi Mi 11 Ultra"
+                  class="w-full h-48 object-cover"
+                />
+                <div
+                  class="absolute top-3 left-3 bg-warning/90 text-white text-xs font-medium px-2 py-1 rounded"
+                >
+                  90新
+                </div>
+                <div
+                  class="absolute top-3 right-3 bg-white/90 text-primary text-xs font-medium px-2 py-1 rounded-full"
+                >
+                  <i class="fas fa-heart mr-1"> </i>
+                  76
+                </div>
+              </div>
+              <div class="p-4">
+                <div class="flex items-center mb-2">
+                  <span
+                    class="text-xs bg-light-2 text-dark-2 px-2 py-1 rounded-full"
+                  >
+                    小米
+                  </span>
+                  <div class="ml-auto flex items-center">
+                    <i class="fas fa-star text-warning text-xs"> </i>
+                    <span class="text-xs text-dark-2 ml-1"> 4.8 </span>
+                  </div>
+                </div>
+                <h3
+                  class="font-medium text-dark mb-1 group-hover:text-primary transition-colors"
+                >
+                  小米 11 Ultra 256GB 陶瓷白
+                </h3>
+                <p class="text-sm text-dark-2 mb-3 line-clamp-2">
+                  电池健康：85%，屏幕完美，陶瓷机身，功能一切正常
+                </p>
+                <div class="flex items-center justify-between">
+                  <div>
+                    <span class="text-lg font-bold text-danger"> ￥3,199 </span>
+                    <span class="text-xs text-light-1 line-through ml-2">
+                      ￥5,499
+                    </span>
+                  </div>
+                  <button
+                    class="bg-primary/10 text-primary p-2 rounded-full hover:bg-primary/20 transition-colors"
+                  >
+                    <i class="fas fa-shopping-cart"> </i>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <!-- 商品卡片5 -->
+            <div
+              class="bg-white rounded-xl shadow-card overflow-hidden hover:shadow-lg transition-shadow duration-300 group"
+            >
+              <div class="relative">
+                <img
+                  src="https://design.gemcoder.com/staticResource/echoAiSystemImages/531b3d29bcee7247de98df72a4f9f063.png"
+                  alt="iPad Pro 11"
+                  class="w-full h-48 object-cover"
+                />
+                <div
+                  class="absolute top-3 left-3 bg-success/90 text-white text-xs font-medium px-2 py-1 rounded"
+                >
+                  95新
+                </div>
+                <div
+                  class="absolute top-3 right-3 bg-white/90 text-primary text-xs font-medium px-2 py-1 rounded-full"
+                >
+                  <i class="fas fa-heart mr-1"> </i>
+                  103
+                </div>
+              </div>
+              <div class="p-4">
+                <div class="flex items-center mb-2">
+                  <span
+                    class="text-xs bg-light-2 text-dark-2 px-2 py-1 rounded-full"
+                  >
+                    Apple
+                  </span>
+                  <div class="ml-auto flex items-center">
+                    <i class="fas fa-star text-warning text-xs"> </i>
+                    <span class="text-xs text-dark-2 ml-1"> 4.9 </span>
+                  </div>
+                </div>
+                <h3
+                  class="font-medium text-dark mb-1 group-hover:text-primary transition-colors"
+                >
+                  iPad Pro 11英寸 2021 256GB
+                </h3>
+                <p class="text-sm text-dark-2 mb-3 line-clamp-2">
+                  WiFi版，电池健康：94%，无划痕，含原装充电器
+                </p>
+                <div class="flex items-center justify-between">
+                  <div>
+                    <span class="text-lg font-bold text-danger"> ￥5,899 </span>
+                    <span class="text-xs text-light-1 line-through ml-2">
+                      ￥7,999
+                    </span>
+                  </div>
+                  <button
+                    class="bg-primary/10 text-primary p-2 rounded-full hover:bg-primary/20 transition-colors"
+                  >
+                    <i class="fas fa-shopping-cart"> </i>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <!-- 商品卡片6 -->
+            <div
+              class="bg-white rounded-xl shadow-card overflow-hidden hover:shadow-lg transition-shadow duration-300 group"
+            >
+              <div class="relative">
+                <img
+                  src="https://design.gemcoder.com/staticResource/echoAiSystemImages/350b460593ee0b93d4b141de967579de.png"
+                  alt="MacBook Pro 13"
+                  class="w-full h-48 object-cover"
+                />
+                <div
+                  class="absolute top-3 left-3 bg-success/90 text-white text-xs font-medium px-2 py-1 rounded"
+                >
+                  95新
+                </div>
+                <div
+                  class="absolute top-3 right-3 bg-white/90 text-primary text-xs font-medium px-2 py-1 rounded-full"
+                >
+                  <i class="fas fa-heart mr-1"> </i>
+                  156
+                </div>
+              </div>
+              <div class="p-4">
+                <div class="flex items-center mb-2">
+                  <span
+                    class="text-xs bg-light-2 text-dark-2 px-2 py-1 rounded-full"
+                  >
+                    Apple
+                  </span>
+                  <div class="ml-auto flex items-center">
+                    <i class="fas fa-star text-warning text-xs"> </i>
+                    <span class="text-xs text-dark-2 ml-1"> 4.9 </span>
+                  </div>
+                </div>
+                <h3
+                  class="font-medium text-dark mb-1 group-hover:text-primary transition-colors"
+                >
+                  MacBook Pro 13" M1 256GB 银色
+                </h3>
+                <p class="text-sm text-dark-2 mb-3 line-clamp-2">
+                  电池循环：86次，几乎全新，无任何划痕，含原装充电器
+                </p>
+                <div class="flex items-center justify-between">
+                  <div>
+                    <span class="text-lg font-bold text-danger"> ￥7,299 </span>
+                    <span class="text-xs text-light-1 line-through ml-2">
+                      ￥9,999
+                    </span>
+                  </div>
+                  <button
+                    class="bg-primary/10 text-primary p-2 rounded-full hover:bg-primary/20 transition-colors"
+                  >
+                    <i class="fas fa-shopping-cart"> </i>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <!-- 商品卡片7 -->
+            <div
+              class="bg-white rounded-xl shadow-card overflow-hidden hover:shadow-lg transition-shadow duration-300 group"
+            >
+              <div class="relative">
+                <img
+                  src="https://design.gemcoder.com/staticResource/echoAiSystemImages/429e8524fa7fc12872a2d99bd078c685.png"
+                  alt="AirPods Pro"
+                  class="w-full h-48 object-cover"
+                />
+                <div
+                  class="absolute top-3 left-3 bg-success/90 text-white text-xs font-medium px-2 py-1 rounded"
+                >
+                  99新
+                </div>
+                <div
+                  class="absolute top-3 right-3 bg-white/90 text-primary text-xs font-medium px-2 py-1 rounded-full"
+                >
+                  <i class="fas fa-heart mr-1"> </i>
+                  89
+                </div>
+              </div>
+              <div class="p-4">
+                <div class="flex items-center mb-2">
+                  <span
+                    class="text-xs bg-light-2 text-dark-2 px-2 py-1 rounded-full"
+                  >
+                    Apple
+                  </span>
+                  <div class="ml-auto flex items-center">
+                    <i class="fas fa-star text-warning text-xs"> </i>
+                    <span class="text-xs text-dark-2 ml-1"> 4.8 </span>
+                  </div>
+                </div>
+                <h3
+                  class="font-medium text-dark mb-1 group-hover:text-primary transition-colors"
+                >
+                  AirPods Pro 无线降噪耳机
+                </h3>
+                <p class="text-sm text-dark-2 mb-3 line-clamp-2">
+                  电池健康：98%，全套包装，几乎全新，在保
+                </p>
+                <div class="flex items-center justify-between">
+                  <div>
+                    <span class="text-lg font-bold text-danger"> ￥1,299 </span>
+                    <span class="text-xs text-light-1 line-through ml-2">
+                      ￥1,999
+                    </span>
+                  </div>
+                  <button
+                    class="bg-primary/10 text-primary p-2 rounded-full hover:bg-primary/20 transition-colors"
+                  >
+                    <i class="fas fa-shopping-cart"> </i>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <!-- 商品卡片8 -->
+            <div
+              class="bg-white rounded-xl shadow-card overflow-hidden hover:shadow-lg transition-shadow duration-300 group"
+            >
+              <div class="relative">
+                <img
+                  src="https://design.gemcoder.com/staticResource/echoAiSystemImages/2daf82bf840e29572875e45c07181c70.png"
+                  alt="Sony WH-1000XM4"
+                  class="w-full h-48 object-cover"
+                />
+                <div
+                  class="absolute top-3 left-3 bg-warning/90 text-white text-xs font-medium px-2 py-1 rounded"
+                >
+                  90新
+                </div>
+                <div
+                  class="absolute top-3 right-3 bg-white/90 text-primary text-xs font-medium px-2 py-1 rounded-full"
+                >
+                  <i class="fas fa-heart mr-1"> </i>
+                  67
+                </div>
+              </div>
+              <div class="p-4">
+                <div class="flex items-center mb-2">
+                  <span
+                    class="text-xs bg-light-2 text-dark-2 px-2 py-1 rounded-full"
+                  >
+                    Sony
+                  </span>
+                  <div class="ml-auto flex items-center">
+                    <i class="fas fa-star text-warning text-xs"> </i>
+                    <span class="text-xs text-dark-2 ml-1"> 4.9 </span>
+                  </div>
+                </div>
+                <h3
+                  class="font-medium text-dark mb-1 group-hover:text-primary transition-colors"
+                >
+                  Sony WH-1000XM4 无线降噪耳机
+                </h3>
+                <p class="text-sm text-dark-2 mb-3 line-clamp-2">
+                  电池良好，功能正常，含原装充电线和3.5mm线
+                </p>
+                <div class="flex items-center justify-between">
+                  <div>
+                    <span class="text-lg font-bold text-danger"> ￥1,899 </span>
+                    <span class="text-xs text-light-1 line-through ml-2">
+                      ￥2,999
+                    </span>
+                  </div>
+                  <button
+                    class="bg-primary/10 text-primary p-2 rounded-full hover:bg-primary/20 transition-colors"
+                  >
+                    <i class="fas fa-shopping-cart"> </i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- [/MODULE] 9f2_市场大厅页面:商品列表 -- 以卡片式栅格布局展示二手电子设备商品，每个卡片包含设备图片、成色标签、品牌、名称、描述、价格和收藏、加入购物车功能 -->
+          <!-- [MODULE] 5g7_市场大厅页面:分页 -->
+          <div class="flex justify-center mt-8">
+            <nav class="flex items-center space-x-1">
+              <a
+                href="javascript:void(0);"
+                class="w-9 h-9 flex items-center justify-center rounded-lg border border-light-2 text-dark-2 hover:border-primary hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled
+              >
+                <i class="fas fa-chevron-left text-xs"> </i>
+              </a>
+              <a
+                href="javascript:void(0);"
+                class="w-9 h-9 flex items-center justify-center rounded-lg bg-primary text-white"
+              >
+                1
+              </a>
+              <a
+                href="javascript:void(0);"
+                class="w-9 h-9 flex items-center justify-center rounded-lg border border-light-2 text-dark-2 hover:border-primary hover:text-primary"
+              >
+                2
+              </a>
+              <a
+                href="javascript:void(0);"
+                class="w-9 h-9 flex items-center justify-center rounded-lg border border-light-2 text-dark-2 hover:border-primary hover:text-primary"
+              >
+                3
+              </a>
+              <span
+                class="w-9 h-9 flex items-center justify-center text-dark-2"
+              >
+                ...
+              </span>
+              <a
+                href="javascript:void(0);"
+                class="w-9 h-9 flex items-center justify-center rounded-lg border border-light-2 text-dark-2 hover:border-primary hover:text-primary"
+              >
+                12
+              </a>
+              <a
+                href="javascript:void(0);"
+                class="w-9 h-9 flex items-center justify-center rounded-lg border border-light-2 text-dark-2 hover:border-primary hover:text-primary"
+              >
+                <i class="fas fa-chevron-right text-xs"> </i>
+              </a>
+            </nav>
+          </div>
+          <!-- [/MODULE] 5g7_市场大厅页面:分页 -- 包含上一页、页码和下一页功能，当前页码高亮显示 -->
+        </div>
+        <!-- [/MODULE] d23_市场大厅页面 -- 展示二手电子设备商品列表，提供多维度筛选和搜索功能 -->
+        <!-- [/MODULE] abc_主内容区域 -- 包含市场大厅页面 -->
+      </main>
+    </div>
+    <!-- 商品详情模态框 -->
+    <div
+      id="product-modal"
+      class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center opacity-0 invisible transition-all duration-300"
+    >
+      <div
+        class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col transform scale-95 transition-all duration-300"
+      >
+        <div
+          class="p-6 border-b border-light-2 flex items-center justify-between"
+        >
+          <h3 class="text-xl font-bold text-dark">商品详情</h3>
+          <button
+            id="close-modal"
+            class="text-dark-2 hover:text-dark transition-colors"
+          >
+            <i class="fas fa-times text-xl"> </i>
+          </button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <img
+                src="https://design.gemcoder.com/staticResource/echoAiSystemImages/e41860ba53448086448372810ea840f7.png"
+                alt="iPhone 13 Pro"
+                class="w-full h-auto rounded-lg object-cover"
+              />
+              <div class="grid grid-cols-4 gap-2 mt-3">
+                <img
+                  src="https://design.gemcoder.com/staticResource/echoAiSystemImages/976da71a56f76bb008ea9f644b578658.png"
+                  alt="正面"
+                  class="w-full h-20 object-cover rounded cursor-pointer border-2 border-primary"
+                />
+                <img
+                  src="https://design.gemcoder.com/staticResource/echoAiSystemImages/db411100519ddea2c6d56fbd5f206cc5.png"
+                  alt="背面"
+                  class="w-full h-20 object-cover rounded cursor-pointer border border-transparent hover:border-primary/50"
+                />
+                <img
+                  src="https://design.gemcoder.com/staticResource/echoAiSystemImages/5acfa97c2d3cff41ff1b5863ddb3f716.png"
+                  alt="侧面"
+                  class="w-full h-20 object-cover rounded cursor-pointer border border-transparent hover:border-primary/50"
+                />
+                <img
+                  src="https://design.gemcoder.com/staticResource/echoAiSystemImages/1633773f3f4ae96ea8fe56aac4bc5282.png"
+                  alt="配件"
+                  class="w-full h-20 object-cover rounded cursor-pointer border border-transparent hover:border-primary/50"
+                />
+              </div>
+            </div>
+            <div>
+              <div class="flex items-center mb-3">
+                <span
+                  class="text-xs bg-success/90 text-white px-2 py-1 rounded-full"
+                >
+                  95新
+                </span>
+                <span
+                  class="ml-3 text-xs bg-light-2 text-dark-2 px-2 py-1 rounded-full"
+                >
+                  Apple
+                </span>
+                <div class="ml-auto flex items-center">
+                  <button
+                    class="text-dark-2 hover:text-danger transition-colors mr-4"
+                  >
+                    <i class="fas fa-heart mr-1"> </i>
+                    收藏
+                  </button>
+                  <button
+                    class="text-dark-2 hover:text-primary transition-colors"
+                  >
+                    <i class="fas fa-share-alt mr-1"> </i>
+                    分享
+                  </button>
+                </div>
+              </div>
+              <h2 class="text-2xl font-bold text-dark mb-2">
+                iPhone 13 Pro 256GB 星光色
+              </h2>
+              <div class="flex items-center mb-4">
+                <div class="flex items-center">
+                  <i class="fas fa-star text-warning"> </i>
+                  <i class="fas fa-star text-warning"> </i>
+                  <i class="fas fa-star text-warning"> </i>
+                  <i class="fas fa-star text-warning"> </i>
+                  <i class="fas fa-star-half-alt text-warning"> </i>
+                  <span class="ml-2 text-dark font-medium"> 4.9 </span>
+                </div>
+                <span class="mx-3 text-light-1"> | </span>
+                <span class="text-dark-2"> 128人已收藏 </span>
+                <span class="mx-3 text-light-1"> | </span>
+                <span class="text-dark-2"> 32条评价 </span>
+              </div>
+              <div class="mb-6">
+                <div class="flex items-baseline">
+                  <span class="text-3xl font-bold text-danger"> ￥5,299 </span>
+                  <span class="text-sm text-light-1 line-through ml-3">
+                    ￥7,999
+                  </span>
+                  <span
+                    class="ml-3 text-sm bg-danger/10 text-danger px-2 py-1 rounded"
+                  >
+                    省￥2,700
+                  </span>
+                </div>
+                <p class="text-dark-2 mt-1">
+                  已验机：原装正品 · 功能正常 · 无拆修
+                </p>
+              </div>
+              <div class="mb-6">
+                <h4 class="text-sm font-medium text-dark mb-3">设备信息</h4>
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="flex">
+                    <span class="text-dark-2 w-24"> 品牌型号 </span>
+                    <span class="text-dark"> Apple iPhone 13 Pro </span>
+                  </div>
+                  <div class="flex">
+                    <span class="text-dark-2 w-24"> 存储容量 </span>
+                    <span class="text-dark"> 256GB </span>
+                  </div>
+                  <div class="flex">
+                    <span class="text-dark-2 w-24"> 颜色 </span>
+                    <span class="text-dark"> 星光色 </span>
+                  </div>
+                  <div class="flex">
+                    <span class="text-dark-2 w-24"> 网络制式 </span>
+                    <span class="text-dark"> 全网通5G </span>
+                  </div>
+                  <div class="flex">
+                    <span class="text-dark-2 w-24"> 电池健康 </span>
+                    <span class="text-dark"> 92% </span>
+                  </div>
+                  <div class="flex">
+                    <span class="text-dark-2 w-24"> 激活日期 </span>
+                    <span class="text-dark"> 2022-01-15 </span>
+                  </div>
+                  <div class="flex">
+                    <span class="text-dark-2 w-24"> 保修状态 </span>
+                    <span class="text-dark"> 已过保 </span>
+                  </div>
+                  <div class="flex">
+                    <span class="text-dark-2 w-24"> 验机报告 </span>
+                    <a
+                      href="javascript:void(0);"
+                      class="text-primary hover:underline"
+                    >
+                      查看详情
+                    </a>
+                  </div>
+                </div>
+              </div>
+              <div class="mb-6">
+                <h4 class="text-sm font-medium text-dark mb-3">设备描述</h4>
+                <p class="text-dark-2 text-sm leading-relaxed">
+                  本机为个人一手自用，无任何磕碰和划痕，一直带壳使用。电池健康度92%，续航正常。所有功能全部正常，无拆无修，原装配件齐全（充电器、数据线、耳机）。
+                  <br />
+                  <br />
+                  系统已升级到最新版本，无ID锁，可随意还原。赠送原装保护壳一个。
+                </p>
+              </div>
+              <div class="mb-6">
+                <h4 class="text-sm font-medium text-dark mb-3">卖家信息</h4>
+                <div class="flex items-center">
+                  <img
+                    src="https://design.gemcoder.com/staticResource/echoAiSystemImages/4db1f4e22c08cab67f2bb5c522cad076.png"
+                    alt="卖家头像"
+                    class="w-10 h-10 rounded-full object-cover"
+                  />
+                  <div class="ml-3">
+                    <div class="flex items-center">
+                      <h5 class="font-medium text-dark">李同学</h5>
+                      <span
+                        class="ml-2 text-xs bg-success/10 text-success px-2 py-0.5 rounded-full"
+                      >
+                        信用极好
+                      </span>
+                    </div>
+                    <p class="text-xs text-dark-2 mt-0.5">
+                      已认证 · 3年卖家 · 4.9分好评
+                    </p>
+                  </div>
+                  <button
+                    class="ml-auto px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/5 transition-colors"
+                  >
+                    联系卖家
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mt-8">
+            <div class="border-b border-light-2 flex space-x-8">
+              <button
+                class="pb-3 font-medium text-primary border-b-2 border-primary"
+              >
+                验机报告
+              </button>
+              <button
+                class="pb-3 font-medium text-dark-2 hover:text-dark transition-colors"
+              >
+                规格参数
+              </button>
+              <button
+                class="pb-3 font-medium text-dark-2 hover:text-dark transition-colors"
+              >
+                买家评价
+              </button>
+            </div>
+            <div class="mt-6">
+              <div class="bg-light-3 rounded-lg p-4 mb-6">
+                <div class="flex items-center mb-4">
+                  <div
+                    class="w-10 h-10 rounded-full bg-success/20 flex items-center justify-center text-success"
+                  >
+                    <i class="fas fa-check"> </i>
+                  </div>
+                  <div class="ml-3">
+                    <h4 class="font-medium text-dark">验机结论：正常</h4>
+                    <p class="text-sm text-dark-2">
+                      该设备为原装正品，功能正常，无拆修记录
+                    </p>
+                  </div>
+                  <button class="ml-auto text-primary hover:underline text-sm">
+                    查看完整报告
+                  </button>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div class="bg-white p-3 rounded-lg">
+                    <div class="text-sm text-dark-2 mb-1">验机评分</div>
+                    <div class="flex items-center">
+                      <span class="text-xl font-bold text-dark"> 95 </span>
+                      <span class="text-success ml-2 text-sm"> 优秀 </span>
+                    </div>
+                  </div>
+                  <div class="bg-white p-3 rounded-lg">
+                    <div class="text-sm text-dark-2 mb-1">外观成色</div>
+                    <div class="flex items-center">
+                      <span class="text-xl font-bold text-dark"> 95 </span>
+                      <span class="text-success ml-2 text-sm"> 95新 </span>
+                    </div>
+                  </div>
+                  <div class="bg-white p-3 rounded-lg">
+                    <div class="text-sm text-dark-2 mb-1">功能状况</div>
+                    <div class="flex items-center">
+                      <span class="text-xl font-bold text-dark"> 100 </span>
+                      <span class="text-success ml-2 text-sm"> 正常 </span>
+                    </div>
+                  </div>
+                  <div class="bg-white p-3 rounded-lg">
+                    <div class="text-sm text-dark-2 mb-1">电池健康</div>
+                    <div class="flex items-center">
+                      <span class="text-xl font-bold text-dark"> 92% </span>
+                      <span class="text-success ml-2 text-sm"> 良好 </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <h4 class="text-lg font-bold text-dark mb-4">详细验机项目</h4>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h5 class="text-sm font-medium text-dark mb-3">基本信息</h5>
+                  <ul class="space-y-3">
+                    <li class="flex justify-between">
+                      <span class="text-dark-2"> 设备名称 </span>
+                      <span class="text-dark"> iPhone 13 Pro </span>
+                    </li>
+                    <li class="flex justify-between">
+                      <span class="text-dark-2"> 型号 </span>
+                      <span class="text-dark"> A2639 </span>
+                    </li>
+                    <li class="flex justify-between">
+                      <span class="text-dark-2"> 序列号 </span>
+                      <span class="text-dark"> ***Q2T1R**** </span>
+                    </li>
+                    <li class="flex justify-between">
+                      <span class="text-dark-2"> IMEI </span>
+                      <span class="text-dark"> ***861205**** </span>
+                    </li>
+                    <li class="flex justify-between">
+                      <span class="text-dark-2"> 存储容量 </span>
+                      <span class="text-dark"> 256GB (实际256GB) </span>
+                    </li>
+                    <li class="flex justify-between">
+                      <span class="text-dark-2"> 颜色 </span>
+                      <span class="text-dark"> 星光色 </span>
+                    </li>
+                  </ul>
+                </div>
+                <div>
+                  <h5 class="text-sm font-medium text-dark mb-3">功能检测</h5>
+                  <ul class="space-y-3">
+                    <li class="flex justify-between">
+                      <span class="text-dark-2"> 屏幕显示 </span>
+                      <span class="text-success flex items-center">
+                        <i class="fas fa-check mr-1"> </i>
+                        正常
+                      </span>
+                    </li>
+                    <li class="flex justify-between">
+                      <span class="text-dark-2"> 触控功能 </span>
+                      <span class="text-success flex items-center">
+                        <i class="fas fa-check mr-1"> </i>
+                        正常
+                      </span>
+                    </li>
+                    <li class="flex justify-between">
+                      <span class="text-dark-2"> 前置摄像头 </span>
+                      <span class="text-success flex items-center">
+                        <i class="fas fa-check mr-1"> </i>
+                        正常
+                      </span>
+                    </li>
+                    <li class="flex justify-between">
+                      <span class="text-dark-2"> 后置摄像头 </span>
+                      <span class="text-success flex items-center">
+                        <i class="fas fa-check mr-1"> </i>
+                        正常
+                      </span>
+                    </li>
+                    <li class="flex justify-between">
+                      <span class="text-dark-2"> 听筒 </span>
+                      <span class="text-success flex items-center">
+                        <i class="fas fa-check mr-1"> </i>
+                        正常
+                      </span>
+                    </li>
+                    <li class="flex justify-between">
+                      <span class="text-dark-2"> 扬声器 </span>
+                      <span class="text-success flex items-center">
+                        <i class="fas fa-check mr-1"> </i>
+                        正常
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="p-6 border-t border-light-2 bg-light-3/50">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <button
+                class="px-4 py-2 border border-danger text-danger rounded-lg hover:bg-danger/5 transition-colors"
+              >
+                <i class="fas fa-heart mr-2"> </i>
+                加入收藏
+              </button>
+              <button
+                class="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/5 transition-colors"
+              >
+                <i class="fas fa-shopping-cart mr-2"> </i>
+                加入购物车
+              </button>
+            </div>
+            <button
+              class="px-8 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm hover:shadow"
+            >
+              立即购买
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- JavaScript -->
+    <!-- [JSMOD] 6b3_侧边栏切换 -->
+    <script id="sidebar-toggle-script">
+      document.addEventListener('DOMContentLoaded', function () {
+        var sidebar = document.getElementById('sidebar');
+        var sidebarToggle = document.getElementById('sidebar-toggle');
+        sidebarToggle.addEventListener('click', function () {
+          sidebar.classList.toggle('w-64');
+          sidebar.classList.toggle('w-20');
+
+          // 切换Logo文本显示
+          var logoText = sidebar.querySelector('.text-xl.font-bold.text-dark');
+          if (logoText) {
+            logoText.classList.toggle('hidden');
+          }
+
+          // 切换菜单项文本显示
+          var menuTexts = sidebar.querySelectorAll('nav span');
+          menuTexts.forEach(function (text) {
+            text.classList.toggle('hidden');
+          });
+
+          // 切换底部帮助文本显示
+          var helpText = sidebar.querySelector('aside > div:last-child span');
+          if (helpText) {
+            helpText.classList.toggle('hidden');
+          }
+
+          // 调整菜单项图标居中
+          var menuItems = sidebar.querySelectorAll('nav a');
+          menuItems.forEach(function (item) {
+            item.classList.toggle('justify-center');
+            item.classList.toggle('px-2');
+            item.classList.toggle('px-4');
+          });
+
+          // 调整帮助项图标居中
+          var helpItem = sidebar.querySelector('aside > div:last-child a');
+          if (helpItem) {
+            helpItem.classList.toggle('justify-center');
+            helpItem.classList.toggle('px-2');
+            helpItem.classList.toggle('px-4');
+          }
+        });
+      });
+    </script>
+    <!-- [/JSMOD] 6b3_侧边栏切换 -- 实现侧边栏展开和收起功能，点击侧边栏切换按钮时，调整侧边栏宽度并显示/隐藏文本内容 -->
+    <!-- [JSMOD] 8c4_商品详情模态框 -->
+    <script id="product-modal-script">
+      document.addEventListener('DOMContentLoaded', function () {
+        var productModal = document.getElementById('product-modal');
+        var closeModal = document.getElementById('close-modal');
+        var productCards = document.querySelectorAll('.grid > div');
+
+        // 打开模态框
+        productCards.forEach(function (card) {
+          card.addEventListener('click', function (e) {
+            // 排除加入购物车按钮
+            if (!e.target.closest('button')) {
+              productModal.classList.remove('opacity-0', 'invisible');
+              productModal.querySelector('div').classList.remove('scale-95');
+              productModal.querySelector('div').classList.add('scale-100');
+              document.body.style.overflow = 'hidden';
+            }
+          });
+        });
+
+        // 关闭模态框
+        closeModal.addEventListener('click', function () {
+          productModal.classList.add('opacity-0', 'invisible');
+          productModal.querySelector('div').classList.remove('scale-100');
+          productModal.querySelector('div').classList.add('scale-95');
+          document.body.style.overflow = '';
+        });
+
+        // 点击模态框外部关闭
+        productModal.addEventListener('click', function (e) {
+          if (e.target === productModal) {
+            closeModal.click();
+          }
+        });
+
+        // 缩略图切换
+        var thumbnails = document.querySelectorAll('#product-modal .grid-cols-4 img');
+        var mainImage = document.querySelector('#product-modal .max-w-4xl img:first-child');
+        thumbnails.forEach(function (thumb) {
+          thumb.addEventListener('click', function () {
+            // 移除所有缩略图的边框
+            thumbnails.forEach(function (t) {
+              t.classList.remove('border-primary');
+              t.classList.add('border-transparent', 'hover:border-primary/50');
+            });
+
+            // 添加当前缩略图的边框
+            thumb.classList.remove('border-transparent', 'hover:border-primary/50');
+            thumb.classList.add('border-primary');
+
+            // 更改主图
+            var src = thumb.src;
+            mainImage.src = src.replace('width=150&height=150', 'width=600&height=450');
+          });
+        });
+      });
+    </script>
+    <!-- [/JSMOD] 8c4_商品详情模态框 -- 实现商品卡片点击打开详情模态框功能，包含关闭模态框、缩略图切换主图功能 -->
+    <!-- [JSMOD] 9d1_商品筛选交互 -->
+    <script id="product-filter-script">
+      document.addEventListener('DOMContentLoaded', function () {
+        // 这里可以添加筛选器的交互逻辑
+        var filters = document.querySelectorAll('select');
+        filters.forEach(function (filter) {
+          filter.addEventListener('change', function () {
+            // 在实际应用中，这里会触发商品列表的筛选
+            console.log("\u7B5B\u9009\u6761\u4EF6\u53D8\u66F4:".concat(filter.name, "=").concat(filter.value));
+            // 显示加载状态
+            var productGrid = document.querySelector('.grid.grid-cols-1');
+            if (productGrid) {
+              productGrid.style.opacity = '0.5';
+            }
+
+            // 模拟筛选延迟
+            setTimeout(function () {
+              if (productGrid) {
+                productGrid.style.opacity = '1';
+              }
+            }, 500);
+          });
+        });
+      });
+    </script>
+    <!-- [/JSMOD] 9d1_商品筛选交互 -- 实现筛选条件变更时的交互效果，模拟商品列表筛选过程 -->
+  </body>
+</html>
