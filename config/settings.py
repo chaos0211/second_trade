@@ -71,6 +71,28 @@ REST_FRAMEWORK = {
     ),
 }
 
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    # access token 有效期：365 天（开发阶段近似“无限”）
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=365),
+
+    # refresh token 有效期：10 年
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=3650),
+
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": False,
+
+    "AUTH_HEADER_TYPES": ("Bearer",),
+
+    # 你现在 token 里已经在用 role
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+}
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',

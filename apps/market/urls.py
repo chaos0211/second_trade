@@ -3,6 +3,9 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from .views import ProductViewSet, OrderViewSet, ValuationAPI
+from .views_listing import (
+    DraftInitAPI, DraftUploadImagesAPI, DraftAnalyzeAPI, DraftEstimateAPI, DraftPublishAPI
+)
 
 router = DefaultRouter()
 router.register(r"products", ProductViewSet, basename="product")
@@ -11,4 +14,9 @@ router.register(r"orders", OrderViewSet, basename="order")
 urlpatterns = [
     path("valuation/", ValuationAPI.as_view(), name="valuation"),
     path("", include(router.urls)),
+    path("drafts/init/", DraftInitAPI.as_view()),
+    path("drafts/<str:draft_key>/images/", DraftUploadImagesAPI.as_view()),
+    path("drafts/<str:draft_key>/analyze/", DraftAnalyzeAPI.as_view()),
+    path("drafts/<str:draft_key>/estimate/", DraftEstimateAPI.as_view()),
+    path("drafts/<str:draft_key>/publish/", DraftPublishAPI.as_view()),
 ]

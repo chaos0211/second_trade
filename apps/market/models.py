@@ -243,19 +243,59 @@ class Product(models.Model):
 
 
 class ProductImage(models.Model):
+    """商品图片表（本地上传到 media/products/）。
+
+    约定：
+    - 数据库存储图片文件名（image_name），不是完整路径/URL
+    - 文件名为随机/加密命名后的 .jpg，例如："8f3c...a9.jpg"
+    - 完整访问地址在 API 里通过 settings.MEDIA_URL + "products/" + image_name 拼接
     """
-    商品图片表，一对多：
-    - 支持多张图片
-    - 标记主图
-    """
+
+    # 支持“渐进式上架”：先上传图片，不强制绑定商品
     product = models.ForeignKey(
         Product,
         on_delete=models.CASCADE,
         related_name="images",
+        null=True,
+        blank=True,
+        help_text="可先上传图片不绑定商品，后续再关联到草稿商品",
     )
-    image_url = models.URLField(
-        help_text="图片 URL（前端或对象存储地址）",
+
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="uploaded_product_images",
+        help_text="上传者",
     )
+    # 草稿键：用于一次“上架流程”的临时会话/草稿（前端生成 uuid 传入）
+    # 规则：同一 draft_key 下最多 4 张图；主图建议用 is_main=True 或 sort_order=0
+    draft_key = models.CharField(
+        max_length=64,
+        db_index=True,
+        blank=True,
+        default="",
+        help_text="上架草稿键（uuid），用于在未创建商品前暂存图片",
+    )
+
+    # 只存文件名（不含目录、不含 URL）
+    image_name = models.CharField(
+        max_length=255,
+        help_text="加密/随机命名后的 jpg 文件名，如 3b2f...e9.jpg",
+    )
+
+    # 可选元信息
+    original_name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="原始文件名（可选）",
+    )
+    size_bytes = models.PositiveIntegerField(
+        default=0,
+        help_text="文件大小（字节，可选）",
+    )
+
     is_main = models.BooleanField(
         default=False,
         help_text="是否为主图",
@@ -265,11 +305,281 @@ class ProductImage(models.Model):
         help_text="图片排序，数值越小越靠前",
     )
 
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="上传时间",
+    )
+
     class Meta:
         ordering = ["sort_order", "id"]
+        indexes = [
+            models.Index(fields=["uploaded_by", "draft_key"]),
+            models.Index(fields=["product", "sort_order"]),
+        ]
 
     def __str__(self):
-        return f"Image for {self.product_id}"
+        return self.image_name
+
+
+# --- 识别/估价/比价相关模型 ---
+
+class RecognitionResult(models.Model):
+    """图像识别结果快照（只识别主图/第一张图）。
+
+    说明：
+    - 不强行做“成色判断”，成色由估价问卷（ValuationOption/Choice）负责
+    - 识别结果主要用于：判断大类/品牌/型号（可为空，支持用户手动选择）
+    - detections 用于前端展示识别可视化结果（bbox/label/confidence）
+    """
+
+    image = models.OneToOneField(
+        ProductImage,
+        on_delete=models.CASCADE,
+        related_name="recognition",
+    )
+
+    ok = models.BooleanField(default=False, help_text="是否识别成功")
+
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="识别出的分类（可空）",
+    )
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="识别出的品牌（可空）",
+    )
+    device_model = models.ForeignKey(
+        DeviceModel,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="识别出的型号（可空）",
+    )
+
+    confidence = models.FloatField(default=0.0, help_text="识别置信度 0~1")
+    detections = models.JSONField(
+        default=list,
+        help_text="检测框列表（label/confidence/bbox 等），用于前端展示",
+    )
+    message = models.CharField(max_length=200, blank=True, help_text="识别说明/失败原因")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"RecognitionResult(image_id={self.image_id}, ok={self.ok})"
+
+
+class ValuationSnapshot(models.Model):
+    """估价快照（建议售价/区间/比价都从这里或 MarketPriceStat 推导）。
+
+    典型流程：
+    - 前端提交：device_model + choice_ids
+    - 后端计算：estimated_price + breakdown
+    - 再结合 MarketPriceStat 算：market_diff_pct / value_score 等
+    """
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="valuation_snapshots",
+        help_text="发起估价的用户",
+    )
+
+    # 允许先估价不创建商品；确认上架时再绑定到 Product
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="valuation_snapshots",
+        help_text="关联商品（可空）",
+    )
+
+    device_model = models.ForeignKey(DeviceModel, on_delete=models.PROTECT)
+    choice_ids = models.JSONField(default=list, help_text="用户选择的 ValuationChoice id 列表")
+
+    estimated_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="系统估价金额",
+    )
+
+    # 估价明细：每个选项/choice/折旧率/权重等
+    breakdown = models.JSONField(default=list, help_text="估价明细（JSON）")
+
+    # 用于前端展示：建议售价区间（可选）
+    suggested_min = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    suggested_max = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    # 用于“高于/低于市场价”的展示（可选缓存字段）
+    market_median = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    market_diff_pct = models.FloatField(default=0.0, help_text="(selling - median)/median")
+    value_score = models.FloatField(default=0.0, help_text="(median - selling)/median，越大越划算")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"ValuationSnapshot(id={self.id}, price={self.estimated_price})"
+
+
+class MarketPriceStat(models.Model):
+    """市场价格统计（用于比价与性价比排序）。
+
+    简化方案：
+    - p10/p50/p90 表示低价/中位/高价
+    - 初期可用“平台成交价”聚合统计生成；后期可接入爬虫/第三方价格源
+    """
+
+    device_model = models.OneToOneField(
+        DeviceModel,
+        on_delete=models.CASCADE,
+        related_name="market_price",
+    )
+
+    p10_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    p50_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    p90_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    sample_size = models.PositiveIntegerField(default=0, help_text="统计样本量")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"MarketPriceStat({self.device_model_id})"
+
+
+# --- 瑕疵项 / 成色（新三步上架方案） ---
+
+class DefectItem(models.Model):
+    """类别维度的“检查项”（至少 3 项/类目），用于：
+
+    - 前端步骤2：展示系统识别的检查项（屏幕/机身/镜头/接口/按键等）
+    - 识别只输出：每个检查项的损耗程度（0/1/2/3）与可视化框
+
+    注意：这里不做型号识别；检查项仅与 Category 绑定。
+    """
+
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.CASCADE,
+        related_name="defect_items",
+        help_text="所属设备类别",
+    )
+
+    code = models.CharField(
+        max_length=32,
+        help_text="检查项编码（建议英文小写/下划线），如 screen / body / lens / port / joystick",
+    )
+    name = models.CharField(
+        max_length=50,
+        help_text="检查项名称，如 屏幕 / 机身 / 镜头 / 接口 / 摇杆",
+    )
+
+    # 识别/质检提示
+    description = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="检查项说明（给前端提示用，可选）",
+    )
+
+    # 是否必检、排序
+    is_required = models.BooleanField(default=True, help_text="是否为必检项")
+    sort_order = models.PositiveIntegerField(default=0, help_text="前端展示顺序")
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["category", "code"], name="uniq_defectitem_category_code"),
+        ]
+
+    def __str__(self):
+        return f"{self.category.name}-{self.name}"
+
+
+class DefectSeverity(models.Model):
+    """某个检查项的“损耗程度”（用于步骤2 输出与步骤3 估价扣减）。
+
+    level 约定：
+    - 0: 无问题（通常不入库，前端可直接显示 0）
+    - 1: 轻微
+    - 2: 明显
+    - 3: 严重
+
+    penalty_weight：用于估价扣减（0~1），例如屏幕严重碎裂可到 0.25~0.35。
+    """
+
+    defect_item = models.ForeignKey(
+        DefectItem,
+        on_delete=models.CASCADE,
+        related_name="severities",
+    )
+
+    level = models.PositiveSmallIntegerField(help_text="损耗等级：1/2/3")
+    label = models.CharField(max_length=30, help_text="等级名称，如 轻微/明显/严重")
+
+    penalty_weight = models.DecimalField(
+        max_digits=5,
+        decimal_places=4,
+        default=0,
+        help_text="扣减权重（0~1），用于估价算法",
+    )
+
+    description = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="对该等级的解释说明（可选）",
+    )
+
+    class Meta:
+        ordering = ["defect_item", "level", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["defect_item", "level"], name="uniq_defectseverity_item_level"),
+        ]
+
+    def __str__(self):
+        return f"{self.defect_item.name}-{self.label}"
+
+
+class ConditionGrade(models.Model):
+    """“几成新/新旧程度”选项（每个类目一套）。
+
+    用于：步骤2 最后一行展示“几成新”，步骤3 根据 grade_factor 参与估价。
+    """
+
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.CASCADE,
+        related_name="condition_grades",
+    )
+
+    # 例如：99新/95新/9成新/8成新...
+    label = models.CharField(max_length=20, help_text="显示文本，如 9成新")
+
+    # 例如：0.83
+    factor = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        help_text="成色系数（0~1），用于估价算法",
+    )
+
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["category", "label"], name="uniq_conditiongrade_category_label"),
+        ]
+
+    def __str__(self):
+        return f"{self.category.name}-{self.label}"
 
 
 class Order(models.Model):
