@@ -11,11 +11,14 @@
     @unlist="onUnlist"
   />
 
-  <SellWizard
-    :open="wizardOpen"
-    @close="wizardOpen = false"
-    @success="refreshList"
-  />
+  <Teleport to="body">
+    <SellWizard
+      v-if="wizardOpen"
+      v-model:open="wizardOpen"
+      @close="wizardOpen = false"
+      @success="refreshList"
+    />
+  </Teleport>
 </template>
 
 <script setup lang="ts">
