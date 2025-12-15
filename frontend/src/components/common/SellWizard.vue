@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
+import http from "@/api/http";
 import { initDraft, uploadDraftImages, analyzeDraft, estimateDraft, publishDraft } from "@/api/market";
 
 type AnalyzeResult = {
@@ -61,6 +62,44 @@ const loading = reactive({
 
 const errorMsg = ref<string>("");
 
+type MarketCategory = { id: number; name: string };
+type MarketDeviceModel = { id: number; name: string; brand_id: number };
+
+const categoryOptions = ref<MarketCategory[]>([]);
+const modelOptions = ref<MarketDeviceModel[]>([]);
+const loadingOptions = reactive({ category: false, model: false });
+
+async function fetchCategories() {
+  loadingOptions.category = true;
+  try {
+    const { data } = await http.get("/api/market/categories/");
+    categoryOptions.value = Array.isArray(data) ? data : (data?.results ?? []);
+  } finally {
+    loadingOptions.category = false;
+  }
+}
+
+async function fetchModelsByCategory(categoryId: number) {
+  loadingOptions.model = true;
+  try {
+    // 尝试后端支持 brand_id 过滤；不支持则返回全量后前端过滤
+    const { data } = await http.get("/api/market/device-models/", { params: { brand_id: categoryId } });
+    const arr = Array.isArray(data) ? data : (data?.results ?? []);
+    const list = Array.isArray(arr) ? arr : [];
+    modelOptions.value = list.some((m) => Number(m.brand_id) !== categoryId)
+      ? list.filter((m) => Number(m.brand_id) === categoryId)
+      : list;
+  } catch {
+    modelOptions.value = [];
+  } finally {
+    loadingOptions.model = false;
+  }
+}
+
+onMounted(() => {
+  fetchCategories();
+});
+
 // Step1 表单
 const form1 = reactive({
   category_id: "" as string | number,
@@ -69,12 +108,24 @@ const form1 = reactive({
   original_price: "" as string | number,
 });
 
+watch(
+  () => form1.category_id,
+  (v) => {
+    const cid = Number(String(v).trim());
+    form1.device_model_id = "";
+    modelOptions.value = [];
+    if (Number.isFinite(cid) && cid > 0) fetchModelsByCategory(cid);
+  },
+);
+
 // 图片
 const files = ref<File[]>([]);
 const previews = ref<string[]>([]);
 
 // Step2 识别结果
 const analyzeRes = ref<AnalyzeResult | null>(null);
+// Step2 伪装识别：展示 5 秒“正在识别”
+const fakeAnalyzing = ref(false);
 
 // Step2 主图展示：优先使用本地预览（第1张即主图），避免后端仅返回文件名导致无法拼出可访问 URL
 const mainImageUrl = computed(() => {
@@ -104,10 +155,14 @@ const publishRes = ref<PublishResult | null>(null);
 const estimateRes = ref<Record<string, any> | null>(null);
 
 const defaultTitle = computed(() => {
-  const cid = String(form1.category_id).trim();
-  const mid = String(form1.device_model_id).trim();
+  const cid = Number(String(form1.category_id).trim());
+  const mid = Number(String(form1.device_model_id).trim());
+
+  const cname = categoryOptions.value.find((c) => c.id === cid)?.name || (cid ? `类目#${cid}` : "");
+  const mname = modelOptions.value.find((m) => m.id === mid)?.name || (mid ? `型号#${mid}` : "");
   const grade = analyzeRes.value?.grade_label || "";
-  const parts = [cid ? `类目#${cid}` : "", mid ? `型号#${mid}` : "", grade].filter(Boolean);
+
+  const parts = [cname, mname, grade].filter((x) => String(x).trim().length > 0);
   return parts.join(" ").trim();
 });
 
@@ -272,42 +327,7 @@ const priceHint = computed(() => {
 });
 
 // ---------- actions ----------
-async function handleInitDraft() {
-  clearError();
-  publishRes.value = null;
-  analyzeRes.value = null;
 
-  // 校验 Step1
-  const categoryId = String(form1.category_id).trim();
-  const modelId = String(form1.device_model_id).trim();
-  const yearsUsed = toNumber(form1.years_used);
-  const originalPrice = toNumber(form1.original_price);
-
-  if (!categoryId) return setError("请填写 category_id");
-  if (!modelId) return setError("请填写 device_model_id");
-  if (!Number.isFinite(yearsUsed) || yearsUsed < 0) return setError("years_used 必须是 ≥0 的数字");
-  if (!Number.isFinite(originalPrice) || originalPrice <= 0) return setError("original_price 必须是 >0 的数字");
-
-  loading.init = true;
-  try {
-    const res = await initDraft({
-      category_id: Number(categoryId),
-      device_model_id: Number(modelId),
-      years_used: yearsUsed,
-      original_price: originalPrice,
-    });
-
-    const key = res?.draft_key || res?.key || res?.draftKey;
-    if (!key) throw new Error("后端未返回 draft_key");
-    draftKey.value = String(key);
-
-    // 创建草稿后留在 Step1 等上传图片
-  } catch (e: any) {
-    setError(e?.message || "创建草稿失败");
-  } finally {
-    loading.init = false;
-  }
-}
 
 function handlePickImages(ev: Event) {
   clearError();
@@ -338,25 +358,67 @@ function removeImage(idx: number) {
   files.value = next;
 }
 
-async function handleUploadImagesAndGoStep2() {
+async function handleStartRecognize() {
   clearError();
-  if (!draftKey.value) return setError("draft_key 缺失，请先创建草稿");
-  if (files.value.length < 1) return setError("请至少上传 1 张图片（第 1 张为主图）");
-  if (files.value.length > 4) return setError("最多上传 4 张图片");
+  publishRes.value = null;
+  analyzeRes.value = null;
+
+  const categoryId = Number(String(form1.category_id).trim());
+  const modelId = Number(String(form1.device_model_id).trim());
+  const yearsUsed = toNumber(form1.years_used);
+  const originalPrice = toNumber(form1.original_price);
+
+  if (!Number.isFinite(categoryId) || categoryId <= 0) return setError("请选择 category_id");
+  if (!Number.isFinite(modelId) || modelId <= 0) return setError("请选择 device_model_id");
+  if (!Number.isFinite(yearsUsed) || yearsUsed < 0) return setError("years_used 必须是 ≥0 的数字");
+  if (!Number.isFinite(originalPrice) || originalPrice <= 0) return setError("original_price 必须是 >0 的数字");
+
+  if (files.value.length < 1) return setError("请至少选择 1 张图片（第 1 张为主图）");
+  if (files.value.length > 4) return setError("最多选择 4 张图片");
   for (const f of files.value) {
     if (!isJpgOrPng(f)) return setError("仅支持 jpg/png 图片");
   }
 
+  // 1) 创建草稿
+  loading.init = true;
+  try {
+    const res = await initDraft({
+      category_id: categoryId,
+      device_model_id: modelId,
+      years_used: yearsUsed,
+      original_price: originalPrice,
+    });
+
+    const key = res?.draft_key || res?.key || res?.draftKey;
+    if (!key) throw new Error("后端未返回 draft_key");
+    draftKey.value = String(key);
+  } catch (e: any) {
+    setError(e?.message || "创建草稿失败");
+    return;
+  } finally {
+    loading.init = false;
+  }
+
+  // 2) 上传图片
   loading.upload = true;
   try {
-    // 你要求“第一张为主图”，这里严格保持用户当前排序（previews 展示顺序即上传顺序）
     await uploadDraftImages(draftKey.value, files.value);
-    step.value = 2;
   } catch (e: any) {
     setError(e?.message || "上传图片失败");
+    return;
   } finally {
     loading.upload = false;
   }
+
+  // 3) 进入 Step2，先展示 5 秒“正在识别”，再真正调用识别接口
+  step.value = 2;
+  fakeAnalyzing.value = true;
+  try {
+    await new Promise((r) => setTimeout(r, 5000));
+  } finally {
+    fakeAnalyzing.value = false;
+  }
+  await handleAnalyze();
 }
 
 async function handleAnalyze() {
@@ -498,7 +560,7 @@ watch(
     <!-- Stepper -->
     <div class="mb-6 grid grid-cols-3 gap-2">
       <div class="rounded-lg p-3 text-center" :class="step === 1 ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'">
-        1. 草稿+图片
+        1. 图片上传
       </div>
       <div class="rounded-lg p-3 text-center" :class="step === 2 ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'">
         2. 识别结果
@@ -509,39 +571,50 @@ watch(
     </div>
 
     <!-- Step1 -->
-    <div v-if="step === 1" class="space-y-5">
-      <div class="rounded-xl border bg-white p-5">
-        <div class="flex items-center justify-between mb-4">
-          <div class="font-medium">创建草稿（draft）</div>
-          <div class="text-xs text-gray-500" v-if="draftKey">draft_key: <span class="font-mono">{{ draftKey }}</span></div>
+    <!-- Step1 -->
+<div v-if="step === 1" class="space-y-5">
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+    <!-- 左：基本信息 -->
+    <div class="rounded-xl border bg-white p-5">
+      <div class="flex items-center justify-between mb-4">
+        <div class="font-medium">商品信息</div>
+        <div class="text-xs text-gray-500" v-if="draftKey">draft_key: <span class="font-mono">{{ draftKey }}</span></div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-4">
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">类别</label>
+          <select
+            v-model="form1.category_id"
+            class="w-full rounded-lg border px-3 py-2 outline-none focus:ring bg-white"
+            :disabled="loadingOptions.category || isBusy"
+          >
+            <option value="" disabled>请选择类目</option>
+            <option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.name }}</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">型号</label>
+          <select
+            v-model="form1.device_model_id"
+            class="w-full rounded-lg border px-3 py-2 outline-none focus:ring bg-white"
+            :disabled="loadingOptions.model || !form1.category_id || isBusy"
+          >
+            <option value="" disabled>请选择型号</option>
+            <option v-for="m in modelOptions" :key="m.id" :value="m.id">{{ m.name }}</option>
+          </select>
+          <div class="mt-1 text-xs text-gray-500" v-if="!form1.category_id">请先选择类目</div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm text-gray-600 mb-1">category_id</label>
-            <input
-              v-model="form1.category_id"
-              class="w-full rounded-lg border px-3 py-2 outline-none focus:ring"
-              placeholder="例如 1"
-              :disabled="loading.init || isBusy"
-            />
-          </div>
-          <div>
-            <label class="block text-sm text-gray-600 mb-1">device_model_id</label>
-            <input
-              v-model="form1.device_model_id"
-              class="w-full rounded-lg border px-3 py-2 outline-none focus:ring"
-              placeholder="例如 101"
-              :disabled="loading.init || isBusy"
-            />
-          </div>
           <div>
             <label class="block text-sm text-gray-600 mb-1">years_used</label>
             <input
               v-model="form1.years_used"
               class="w-full rounded-lg border px-3 py-2 outline-none focus:ring"
               placeholder="例如 1.5"
-              :disabled="loading.init || isBusy"
+              :disabled="isBusy"
             />
           </div>
           <div>
@@ -550,82 +623,65 @@ watch(
               v-model="form1.original_price"
               class="w-full rounded-lg border px-3 py-2 outline-none focus:ring"
               placeholder="例如 3999"
-              :disabled="loading.init || isBusy"
+              :disabled="isBusy"
             />
           </div>
         </div>
+      </div>
+    </div>
 
-        <div class="mt-4 flex gap-3">
-          <button
-            class="rounded-lg bg-gray-900 text-white px-4 py-2 disabled:opacity-50"
-            @click="handleInitDraft"
-            :disabled="loading.init || isBusy"
-          >
-            {{ loading.init ? "创建中..." : "创建草稿" }}
-          </button>
-          <button
-            class="rounded-lg border px-4 py-2 text-gray-700 disabled:opacity-50"
-            @click="resetAll"
-            :disabled="isBusy"
-            type="button"
-          >
-            重置本页
-          </button>
-        </div>
+    <!-- 右：图片 -->
+    <div class="rounded-xl border bg-white p-5">
+      <div class="font-medium mb-2">图片（最多4张，jpg/png；第1张为主图）</div>
+      <div class="text-sm text-gray-500 mb-4">
+        识别仅使用主图（第1张）。如需更换主图，请删除后重新选择，确保主图在第一位。
       </div>
 
-      <div class="rounded-xl border bg-white p-5">
-        <div class="font-medium mb-2">上传图片（最多4张，jpg/png；第1张为主图）</div>
-        <div class="text-sm text-gray-500 mb-4">
-          识别仅使用主图（第1张）。如需更换主图，请调整图片顺序：删除后重新选择，确保主图在第一位。
-        </div>
+      <div class="rounded-lg border border-dashed p-4 flex items-center justify-between gap-3">
+        <div class="text-sm text-gray-600">已选择 {{ files.length }}/4</div>
 
-        <div class="flex flex-wrap items-center gap-3">
+        <label class="inline-flex items-center justify-center rounded-lg bg-gray-900 text-white px-4 py-2 cursor-pointer">
+          <span>选择图片</span>
           <input
             type="file"
             accept="image/png,image/jpeg"
             multiple
-            class="block"
+            class="hidden"
             @change="handlePickImages"
             :disabled="isBusy"
           />
-          <div class="text-sm text-gray-500">
-            已选择 {{ files.length }}/4
-          </div>
-        </div>
+        </label>
+      </div>
 
-        <div v-if="previews.length" class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div
-            v-for="(url, idx) in previews"
-            :key="url"
-            class="relative rounded-lg border overflow-hidden"
-          >
-            <img :src="url" class="w-full h-28 object-cover" />
-            <div class="absolute left-2 top-2 text-xs px-2 py-1 rounded bg-black/70 text-white">
-              {{ idx === 0 ? "主图" : `图${idx + 1}` }}
-            </div>
-            <button
-              class="absolute right-2 top-2 text-xs px-2 py-1 rounded bg-white/90 border"
-              @click="removeImage(idx)"
-              :disabled="isBusy"
-              type="button"
-            >
-              删除
-            </button>
+      <div v-if="previews.length" class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div v-for="(url, idx) in previews" :key="url" class="relative rounded-lg border overflow-hidden">
+          <img :src="url" class="w-full h-28 object-cover" />
+          <div class="absolute left-2 top-2 text-xs px-2 py-1 rounded bg-black/70 text-white">
+            {{ idx === 0 ? "主图" : `图${idx + 1}` }}
           </div>
-        </div>
-
-        <div class="mt-5 flex gap-3">
           <button
-            class="rounded-lg bg-gray-900 text-white px-4 py-2 disabled:opacity-50"
-            @click="handleUploadImagesAndGoStep2"
-            :disabled="!canGoStep2 || isBusy"
+            class="absolute right-2 top-2 text-xs px-2 py-1 rounded bg-white/90 border"
+            @click="removeImage(idx)"
+            :disabled="isBusy"
+            type="button"
           >
-            {{ loading.upload ? "上传中..." : "上传并进入识别" }}
+            删除
           </button>
         </div>
       </div>
     </div>
+  </div>
+
+  <div class="flex justify-end">
+    <button
+      class="rounded-lg bg-gray-900 text-white px-6 py-2 disabled:opacity-50"
+      @click="handleStartRecognize"
+      :disabled="isBusy"
+    >
+      {{ loading.init || loading.upload || loading.analyze ? "处理中..." : "开始识别" }}
+    </button>
+  </div>
+</div>
 
     <!-- Step2 -->
     <div v-else-if="step === 2" class="space-y-5">
@@ -637,15 +693,16 @@ watch(
           </button>
         </div>
 
-        <div class="flex gap-3">
-          <button
-            class="rounded-lg bg-gray-900 text-white px-4 py-2 disabled:opacity-50"
-            @click="handleAnalyze"
-            :disabled="isBusy"
+        <div class="mt-2">
+          <div
+            v-if="fakeAnalyzing || loading.analyze"
+            class="text-sm text-gray-600"
           >
-            {{ loading.analyze ? "识别中..." : "开始识别" }}
-          </button>
+            正在识别...
+          </div>
+        </div>
 
+        <div class="flex justify-end mt-4">
           <button
             class="rounded-lg border px-4 py-2 text-gray-700 disabled:opacity-50"
             @click="goStep3"
@@ -708,9 +765,15 @@ watch(
         <!-- 摘要（不出现“存储容量”等字段） -->
         <div class="rounded-lg border p-4 mb-4">
           <div class="text-sm text-gray-500 mb-2">商品摘要</div>
-          <div class="text-sm text-gray-700 space-y-1">
+          <div class="text-sm text-gray-700 space-y-2">
             <div>成色：<span class="font-semibold">{{ analyzeRes?.grade_label }}</span>（{{ analyzeRes?.grade_score }}）</div>
-            <div>瑕疵数：{{ analyzeRes?.defects?.length ?? 0 }}</div>
+            <div>
+              <div class="text-sm text-gray-600 mb-1">瑕疵</div>
+              <div v-if="analyzeRes?.defects?.length" class="space-y-1">
+                <div v-for="(d, i) in analyzeRes!.defects" :key="i" class="text-sm text-red-600">• {{ d }}</div>
+              </div>
+              <div v-else class="text-sm text-gray-500">未识别到明显瑕疵</div>
+            </div>
           </div>
         </div>
 

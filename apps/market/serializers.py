@@ -1,5 +1,9 @@
 from rest_framework import serializers
 from decimal import Decimal
+
+from django.utils import timezone
+from zoneinfo import ZoneInfo
+
 from .models import (
     Category,
     DeviceModel,
@@ -10,6 +14,22 @@ from .models import (
     ValuationOption,
     ValuationChoice,
 )
+
+# --- market 下拉选项序列化器（给前端 Step1 使用） ---
+
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ["id", "name", "code"]
+
+
+class DeviceModelSerializer(serializers.ModelSerializer):
+    # 前端用 brand_id 对接 category_id
+    brand_id = serializers.IntegerField(source="brand.category_id", read_only=True)
+
+    class Meta:
+        model = DeviceModel
+        fields = ["id", "name", "brand_id"]
 
 # --- 兼容旧版 market/views.py 的序列化器（保留，避免后端起不来） ---
 
@@ -67,14 +87,43 @@ class PublishSerializer(serializers.Serializer):
 
 class ProductListSerializer(serializers.ModelSerializer):
     main_image = serializers.SerializerMethodField()
+    created_at = serializers.SerializerMethodField()
+
     class Meta:
         model = Product
-        fields = ["id","title","selling_price","estimated_price","status","view_count","favorite_count","main_image"]
+        fields = [
+            "id",
+            "title",
+            "selling_price",
+            "estimated_price",
+            "status",
+            "view_count",
+            "favorite_count",
+            "main_image",
+            "created_at",
+        ]
 
     def get_main_image(self, obj):
-        img = obj.images.order_by("sort_order","id").first()
+        img = obj.images.order_by("sort_order", "id").first()
         if not img:
-            return ""
-        request = self.context.get("request")
-        # 只返回文件名也行，这里返回可访问URL更方便
-        return request.build_absolute_uri(f"/media/products/{img.image_name}")
+            return None
+        # 返回相对路径，交由前端按 /media/products/<name> 展示
+        return f"/media/products/{img.image_name}"
+
+    def get_created_at(self, obj):
+        dt = getattr(obj, "created_at", None)
+        if not dt:
+            return None
+        # 统一用北京时间（Asia/Shanghai），24小时制
+        try:
+            bj = ZoneInfo("Asia/Shanghai")
+        except Exception:
+            bj = None
+
+        try:
+            dt_local = timezone.localtime(dt, bj) if bj else timezone.localtime(dt)
+        except Exception:
+            # 若 dt 是 naive，先当作当前时区处理
+            dt_local = dt
+
+        return dt_local.strftime("%Y-%m-%d %H:%M:%S")

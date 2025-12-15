@@ -5,11 +5,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 
 from .services import ValuationEngine, TradeService
-from .models import Product, Order
+from .models import Category, DeviceModel, Product, Order
 from .serializers import (
     ValuationRequestSerializer,
     ProductCreateSerializer,
+    ProductListSerializer,
     OrderSerializer,
+    CategorySerializer,
+    DeviceModelSerializer,
 )
 
 
@@ -42,6 +45,11 @@ class ProductViewSet(ModelViewSet):
 
     queryset = Product.objects.all()
     serializer_class = ProductCreateSerializer
+
+    def get_serializer_class(self):
+        if self.action in ["list", "retrieve"]:
+            return ProductListSerializer
+        return ProductCreateSerializer
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
@@ -57,8 +65,25 @@ class ProductViewSet(ModelViewSet):
         )
 
     def get_queryset(self):
-        # 只展示上架中的商品
-        return Product.objects.filter(status="on_sale")
+        """同一接口支持两种场景：
+
+        1) 市场大厅：不传 seller_id -> 返回所有上架商品
+        2) 卖家页：传 seller_id -> 仅返回该卖家的上架商品
+
+        GET /api/market/products/                # 市场大厅
+        GET /api/market/products/?seller_id=123  # 卖家上架中商品
+        """
+        qs = Product.objects.filter(status="on_sale")
+
+        seller_id = self.request.query_params.get("seller_id")
+        if seller_id:
+            try:
+                sid = int(seller_id)
+                qs = qs.filter(seller_id=sid)
+            except Exception:
+                return Product.objects.none()
+
+        return qs
 
 
 class OrderViewSet(ModelViewSet):
@@ -106,3 +131,49 @@ class OrderViewSet(ModelViewSet):
             )
         except Exception as e:
             return Response({"error": str(e)}, status=400)
+
+class CategoryViewSet(ModelViewSet):
+    """类目列表（market_category）"""
+
+    queryset = Category.objects.all().order_by("id")
+    serializer_class = CategorySerializer
+    permission_classes = [IsAuthenticated]
+
+    http_method_names = ["get"]
+
+
+class DeviceModelViewSet(ModelViewSet):
+    """型号列表（market_devicemodel）
+
+    兼容前端传 brand_id=category_id：
+    - /api/market/device-models/?brand_id=<category_id>
+      -> 过滤 DeviceModel.brand.category_id == brand_id
+    """
+
+    queryset = DeviceModel.objects.select_related("brand", "brand__category").all().order_by("id")
+    serializer_class = DeviceModelSerializer
+    permission_classes = [IsAuthenticated]
+
+    http_method_names = ["get"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        brand_id = self.request.query_params.get("brand_id")
+        category_id = self.request.query_params.get("category_id")
+
+        # 兼容：brand_id 传的是 category_id
+        if brand_id:
+            try:
+                cid = int(brand_id)
+                return qs.filter(brand__category_id=cid)
+            except Exception:
+                return qs.none()
+
+        if category_id:
+            try:
+                cid = int(category_id)
+                return qs.filter(brand__category_id=cid)
+            except Exception:
+                return qs.none()
+
+        return qs

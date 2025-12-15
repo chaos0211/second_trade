@@ -1,66 +1,63 @@
 <template>
-  <SellProductList
-    :stats="stats"
-    :items="items"
-    :pagination="pagination"
-    @open-wizard="wizardOpen = true"
-    @search="onSearch"
-    @page="onPage"
-    @view="onView"
-    @edit="onEdit"
-    @unlist="onUnlist"
-  />
+  <div>
+    <div v-if="sellerId == null" class="p-6 text-sm text-neutral-600">
+      加载中...
+    </div>
 
-  <Teleport to="body">
-    <SellWizard
-      v-if="wizardOpen"
-      v-model:open="wizardOpen"
-      @close="wizardOpen = false"
-      @success="refreshList"
+    <SellProductList
+      v-else
+      :key="listKey"
+      :sellerId="sellerId"
+      @open-wizard="wizardOpen = true"
+      @view="onView"
+      @edit="onEdit"
+      @unlist="onUnlist"
     />
-  </Teleport>
+
+    <Teleport to="body">
+      <SellWizard
+        v-if="wizardOpen"
+        v-model:open="wizardOpen"
+        @close="wizardOpen = false"
+        @success="onPublishSuccess"
+      />
+    </Teleport>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { onMounted, ref } from "vue";
+import http from "@/api/http";
 import SellProductList from "@/components/common/SellProductList.vue";
 import SellWizard from "@/components/common/SellWizard.vue";
 
 const wizardOpen = ref(false);
+const sellerId = ref<number | null>(null);
+const listKey = ref(0);
 
-const stats = ref({ onSale: 12, todayViews: 86, todayFavorites: 15 });
-
-const items = ref([
-  {
-    id: 1,
-    image: "https://design.gemcoder.com/staticResource/echoAiSystemImages/877eae20b4cd21fa5cfbb0e03eedd327.png",
-    title: "iPhone 13 Pro 256GB 星光色",
-    conditionLabel: "95新",
-    price: 5299,
-    views: 128,
-    favorites: 24,
-    createdAt: "2023-06-15",
-  },
-  // ...你后面用 API 替换
-]);
-
-const pagination = ref({ page: 1, pageCount: 2, from: 1, to: 6, total: 12, pages: [1, 2] });
-
-function refreshList() {
-  // TODO: 调用后端刷新 “上架中列表 + 统计”
+async function fetchMe() {
+  const { data } = await http.get("/api/auth/me");
+  const id = data?.id ?? data?.user?.id;
+  sellerId.value = id != null ? Number(id) : null;
 }
 
-function onSearch(filter: any) {
-  // TODO: 带 filter 调接口
-  console.log("search:", filter);
+function onPublishSuccess() {
+  wizardOpen.value = false;
+  // 强制刷新列表（最稳妥，避免依赖子组件内部 watch 逻辑）
+  listKey.value += 1;
 }
 
-function onPage(page: number) {
-  pagination.value.page = page;
-  // TODO: 调接口拉页
+function onView(id: any) {
+  console.log("view", id);
+}
+function onEdit(id: any) {
+  console.log("edit", id);
+}
+function onUnlist(id: any) {
+  console.log("unlist", id);
 }
 
-function onView(id: any) { console.log("view", id); }
-function onEdit(id: any) { console.log("edit", id); }
-function onUnlist(id: any) { console.log("unlist", id); }
+onMounted(() => {
+  fetchMe();
+});
 </script>
