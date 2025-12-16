@@ -5,7 +5,6 @@
       <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
         <div>
           <h1 class="text-2xl md:text-3xl font-bold text-slate-800">系统管理</h1>
-          <p class="text-slate-500 mt-1">用户列表管理（仅管理员可见）</p>
         </div>
 
         <div class="flex items-center gap-3">
@@ -121,14 +120,14 @@
           </div>
 
           <div v-if="filtered.length === 0" class="p-10 text-center text-slate-500">
-            暂无匹配用户
+            暂无用户
           </div>
         </div>
 
         <!-- Pagination -->
         <div class="px-6 py-4 border-t border-slate-200 bg-white flex items-center justify-between">
           <div class="text-sm text-slate-500">
-            共 {{ filtered.length }} 条 · 第 {{ page }} / {{ totalPages }} 页
+            共 {{ totalCount || filtered.length }} 条 · 第 {{ page }} / {{ totalPages }} 页
           </div>
 
           <div class="flex items-center gap-2">
@@ -164,6 +163,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import AdminUserModal from "@/components/admin/AdminUserModal.vue";
+import http from "@/api/http";
 
 type Role = "user" | "admin";
 type UserRow = {
@@ -173,9 +173,12 @@ type UserRow = {
   email?: string;
   phone?: string;
   role: Role;
-  balance: number;
+  balance: number | string;
   credit_score: number;
   avatar?: string;
+  address?: string;
+  is_superuser?: number | boolean | string;
+  is_staff?: number | boolean | string;
 };
 
 const fallbackAvatar =
@@ -190,19 +193,33 @@ const modalOpen = ref(false);
 const modalMode = ref<"create" | "edit">("edit");
 const editingUser = ref<UserRow | null>(null);
 
-// mock 数据（接真实接口后替换 loadUsers / CRUD）
-const users = reactive<UserRow[]>([
-  { id: 1, username: "admin", nickname: "系统管理员", email: "admin@test.com", phone: "13800000001", role: "admin", balance: 10000, credit_score: 100 },
-  { id: 2, username: "user123", nickname: "小明", email: "u1@test.com", phone: "13800000000", role: "user", balance: 12000, credit_score: 92 },
-  { id: 3, username: "user456", nickname: "小红", email: "u2@test.com", phone: "13900000000", role: "user", balance: 8600, credit_score: 75 },
-]);
+const users = ref<UserRow[]>([]);
+const totalCount = ref(0);
 
 async function loadUsers() {
   loading.value = true;
   try {
-    // TODO: GET /api/admin/users/?q=...&page=...&page_size=10
-    // 这里先模拟
-    await new Promise((r) => setTimeout(r, 300));
+    const params: any = { page: page.value, page_size: pageSize };
+    if (q.value) params.q = q.value;
+
+    const resp: any = await http.get("/api/auth/admin/users/", { params });
+    const data: any = resp?.data ?? resp;
+
+    // 支持两种返回：分页 {count, results} 或数组 []
+    if (Array.isArray(data)) {
+      users.value = data as UserRow[];
+      totalCount.value = data.length;
+    } else {
+      const results = Array.isArray(data?.results) ? data.results : Array.isArray(data?.data) ? data.data : [];
+      users.value = results as UserRow[];
+      totalCount.value = Number(data?.count ?? results.length ?? 0);
+    }
+  } catch (e: any) {
+    const d = e?.response?.data;
+    const msg = d?.detail || d?.error || (typeof d === "string" ? d : "加载用户列表失败");
+    alert(msg);
+    users.value = [];
+    totalCount.value = 0;
   } finally {
     loading.value = false;
   }
@@ -210,26 +227,23 @@ async function loadUsers() {
 
 onMounted(loadUsers);
 
-const filtered = computed(() => {
-  const s = q.value.toLowerCase();
-  if (!s) return users;
-  return users.filter((u) => {
-    return (
-      (u.username || "").toLowerCase().includes(s) ||
-      (u.email || "").toLowerCase().includes(s) ||
-      (u.phone || "").toLowerCase().includes(s) ||
-      (u.nickname || "").toLowerCase().includes(s)
-    );
-  });
+const filtered = computed(() => users.value);
+
+const totalPages = computed(() => {
+  const n = totalCount.value || filtered.value.length;
+  return Math.max(1, Math.ceil(n / pageSize));
 });
 
-const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize)));
-watch([q], () => (page.value = 1));
-
-const paged = computed(() => {
-  const start = (page.value - 1) * pageSize;
-  return filtered.value.slice(start, start + pageSize);
+watch([q], () => {
+  page.value = 1;
+  loadUsers();
 });
+
+watch([page], () => {
+  loadUsers();
+});
+
+const paged = computed(() => filtered.value);
 
 // ===== actions =====
 function openEdit(u: UserRow) {
@@ -245,6 +259,7 @@ function openCreate() {
     nickname: "",
     email: "",
     phone: "",
+    address: "",
     role: "user",
     balance: 10000,
     credit_score: 100,
@@ -257,26 +272,60 @@ function closeModal() {
   editingUser.value = null;
 }
 
-function confirmDelete(u: UserRow) {
+async function confirmDelete(u: UserRow) {
   if (!confirm(`确定要删除用户 ${u.username} 吗？`)) return;
-  const idx = users.findIndex((x) => x.id === u.id);
-  if (idx >= 0) users.splice(idx, 1);
-
-  // TODO: DELETE /api/admin/users/{id}/
+  try {
+    await http.delete(`/api/auth/admin/users/${u.id}/`);
+    await loadUsers();
+  } catch (e: any) {
+    const d = e?.response?.data;
+    const msg = d?.detail || d?.error || (typeof d === "string" ? d : "删除失败");
+    alert(msg);
+  }
 }
 
 // modal submit
-function handleSubmit(payload: UserRow & { password?: string }) {
-  if (modalMode.value === "create") {
-    // TODO: POST /api/admin/users/
-    payload.id = Date.now();
-    users.unshift({ ...payload });
-  } else {
-    // TODO: PATCH /api/admin/users/{id}/
-    const idx = users.findIndex((x) => x.id === payload.id);
-    if (idx >= 0) users[idx] = { ...payload };
+async function handleSubmit(payload: UserRow & { password?: string }) {
+  try {
+    if (modalMode.value === "create") {
+      const body: any = {
+        username: payload.username,
+        nickname: payload.nickname,
+        email: payload.email,
+        phone: payload.phone,
+        address: payload.address,
+        role: payload.role,
+        balance: payload.balance,
+        credit_score: payload.credit_score,
+        avatar: payload.avatar,
+      };
+      if (payload.password) body.password = payload.password;
+
+      await http.post("/api/auth/admin/users/", body);
+    } else {
+      const body: any = {
+        username: payload.username,
+        nickname: payload.nickname,
+        email: payload.email,
+        phone: payload.phone,
+        address: payload.address,
+        role: payload.role,
+        balance: payload.balance,
+        credit_score: payload.credit_score,
+        avatar: payload.avatar,
+      };
+      if (payload.password) body.password = payload.password;
+
+      await http.put(`/api/auth/admin/users/${payload.id}/`, body);
+    }
+
+    closeModal();
+    await loadUsers();
+  } catch (e: any) {
+    const d = e?.response?.data;
+    const msg = d?.detail || d?.error || (typeof d === "string" ? d : "保存失败");
+    alert(msg);
   }
-  closeModal();
 }
 
 // ===== ui helpers =====

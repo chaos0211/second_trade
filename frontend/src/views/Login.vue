@@ -33,9 +33,9 @@ async function onSubmit() {
       password: password.value,
     });
     // 保存 JWT（后续请求由 http.ts 自动带上 Authorization: Bearer <access>）
-    localStorage.setItem("token", data.access);
+    localStorage.setItem("access", data.access);
     localStorage.setItem("refresh", data.refresh);
-    localStorage.setItem("current_user", JSON.stringify(data.user));
+    localStorage.setItem("user", JSON.stringify(data.user));
     router.push("/");
   } catch (e: any) {
     const data = e?.response?.data;

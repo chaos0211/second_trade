@@ -142,5 +142,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             "role": self.user.role,
             "address": self.user.address,
             "credit_score": self.user.credit_score,
+            "is_superuser": int(getattr(self.user, "is_superuser", False)),
+            "is_staff": int(getattr(self.user, "is_staff", False)),
         }
         return data

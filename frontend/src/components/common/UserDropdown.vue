@@ -43,7 +43,7 @@ const handleLogout = async () => {
   try {
     const refresh = localStorage.getItem('refresh')
     if (refresh) {
-      await http.post('/api/auth/logout/', { refresh })
+      await http.post('/api/auth/logout', { refresh })
     }
   } catch (e) {
     // ignore errors; logout should still proceed locally

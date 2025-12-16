@@ -46,6 +46,8 @@ class SimpleTokenObtainPairSerializer(TokenObtainPairSerializer):
             "phone": getattr(self.user, "phone", None),
             "address": getattr(self.user, "address", None),
             "role": getattr(self.user, "role", ""),
+            "is_superuser": int(getattr(self.user, "is_superuser", False)),
+            "is_staff": int(getattr(self.user, "is_staff", False)),
         }
         return data
 

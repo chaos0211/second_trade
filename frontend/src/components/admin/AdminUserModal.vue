@@ -59,6 +59,14 @@
             />
           </Field>
 
+          <Field label="地址">
+            <input
+              v-model.trim="form.address"
+              class="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#165DFF]/30"
+              placeholder="address"
+            />
+          </Field>
+
           <Field label="信用分">
             <input
               v-model.number="form.credit_score"
@@ -78,9 +86,7 @@
           </Field>
 
           <div class="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div class="text-sm text-slate-600 mb-3">
-              密码（可选）：留空表示不修改
-            </div>
+            <div class="text-sm text-slate-600 mb-3">密码（可选）：留空表示不修改</div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field label="新密码">
@@ -101,9 +107,7 @@
               </Field>
             </div>
 
-            <div v-if="passwordError" class="mt-2 text-sm text-red-600">
-              {{ passwordError }}
-            </div>
+            <div v-if="passwordError" class="mt-2 text-sm text-red-600">{{ passwordError }}</div>
           </div>
         </div>
       </div>
@@ -137,14 +141,15 @@
 import { computed, defineComponent, h, reactive, watch } from "vue";
 
 type Role = "user" | "admin";
-type UserRow = {
+export type UserRow = {
   id: number | string;
   username: string;
   nickname?: string;
   email?: string;
   phone?: string;
+  address?: string;
   role: Role;
-  balance: number;
+  balance: number | string;
   credit_score: number;
   avatar?: string;
 };
@@ -167,6 +172,7 @@ const form = reactive<any>({
   nickname: "",
   email: "",
   phone: "",
+  address: "",
   role: "user",
   balance: 10000,
   credit_score: 100,
@@ -187,6 +193,7 @@ watch(
       nickname: u.nickname ?? "",
       email: u.email ?? "",
       phone: u.phone ?? "",
+      address: u.address ?? "",
       role: u.role ?? "user",
       balance: u.balance ?? 10000,
       credit_score: u.credit_score ?? 100,
@@ -206,6 +213,7 @@ const dirty = computed(() => {
     form.nickname !== original.nickname ||
     form.email !== original.email ||
     form.phone !== original.phone ||
+    form.address !== original.address ||
     form.role !== original.role ||
     Number(form.balance) !== Number(original.balance) ||
     Number(form.credit_score) !== Number(original.credit_score) ||
@@ -231,6 +239,7 @@ function submit() {
     nickname: form.nickname,
     email: form.email,
     phone: form.phone,
+    address: form.address,
     role: form.role,
     balance: Number(form.balance),
     credit_score: Number(form.credit_score),
@@ -239,7 +248,6 @@ function submit() {
   });
 }
 
-/** Field：左侧 label，右侧 input */
 const Field = defineComponent({
   name: "Field",
   props: { label: { type: String, required: true } },
