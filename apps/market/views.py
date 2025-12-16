@@ -11,6 +11,7 @@ from .serializers import (
     ProductCreateSerializer,
     ProductListSerializer,
     OrderSerializer,
+    OrderDetailSerializer,
     CategorySerializer,
     DeviceModelSerializer,
 )
@@ -94,9 +95,39 @@ class OrderViewSet(ModelViewSet):
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_serializer_class(self):
+        # 列表/详情返回订单+商品摘要信息，便于前端展示
+        if self.action in {"list", "retrieve", "buy", "sell"}:
+            return OrderDetailSerializer
+        return OrderSerializer
+
     def get_queryset(self):
-        # 只返回当前用户作为买家的订单
-        return Order.objects.filter(buyer=self.request.user)
+        """订单可见性（不依赖前端 role 参数）：
+
+        - 默认 list / buy：buyer == 当前用户
+        - sell / ship：product.seller == 当前用户
+        """
+        user = self.request.user
+        action = getattr(self, "action", None)
+
+        qs = Order.objects.select_related("product", "buyer", "product__seller")
+
+        if action in {"sell", "ship"}:
+            return qs.filter(product__seller=user)
+
+        # 默认：买家订单
+        return qs.filter(buyer=user)
+
+    def _ensure_buyer(self, order: Order):
+        if order.buyer_id != self.request.user.id:
+            raise PermissionError("not buyer")
+
+    def _ensure_seller(self, order: Order):
+        if getattr(order, "product_id", None) is None or order.product.seller_id != self.request.user.id:
+            raise PermissionError("not seller")
+
+    def _is_terminal(self, status: str) -> bool:
+        return status in {"completed", "refunded"}
 
     @action(detail=False, methods=["post"])
     def create_trade(self, request):
@@ -107,30 +138,153 @@ class OrderViewSet(ModelViewSet):
         try:
             product_id = int(product_id)
             order = TradeService.create_order(request.user, product_id)
+            # 初始为待付款
+            if getattr(order, "status", None) in (None, ""):
+                order.status = "created"
+                order.save(update_fields=["status"])
             return Response(
                 {
+                    "order_id": order.id,
                     "order_no": order.order_no,
-                    "status": "created",
+                    "status": order.status or "created",
+                    "product_id": product_id,
                 }
             )
         except Exception as e:
             return Response({"error": str(e)}, status=400)
 
+    @action(detail=False, methods=["get"])
+    def buy(self, request):
+        """买家订单列表：我买的"""
+        qs = Order.objects.select_related("product", "buyer", "product__seller").filter(buyer=request.user).order_by("-id")
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            ser = self.get_serializer(page, many=True)
+            return self.get_paginated_response(ser.data)
+        ser = self.get_serializer(qs, many=True)
+        return Response(ser.data)
+
+    @action(detail=False, methods=["get"])
+    def sell(self, request):
+        """卖家订单列表：我卖出的（通过订单关联商品联查卖家）"""
+        qs = Order.objects.select_related("product", "buyer", "product__seller").filter(product__seller=request.user).order_by("-id")
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            ser = self.get_serializer(page, many=True)
+            return self.get_paginated_response(ser.data)
+        ser = self.get_serializer(qs, many=True)
+        return Response(ser.data)
+
     @action(detail=True, methods=["post"])
     def confirm_receipt(self, request, pk=None):
-        """
-        买家确认收货，完成交易闭环
-        """
+        """买家确认收货 -> 状态：completed（完成）"""
         try:
-            TradeService.complete_order(pk, request.user)
-            return Response(
-                {
-                    "status": "success",
-                    "message": "交易完成，信用分已更新",
-                }
-            )
+            order = self.get_object()
+            self._ensure_buyer(order)
+
+            if self._is_terminal(order.status):
+                return Response({"error": "order is terminal"}, status=400)
+
+            # 仅允许在待收货/已发货阶段确认收货
+            if order.status not in {"pending_receipt", "shipped"}:
+                return Response({"error": "invalid status"}, status=400)
+
+            order.status = "completed"
+            order.save(update_fields=["status"])
+            return Response({"order_id": order.id, "status": order.status})
+        except PermissionError:
+            return Response({"error": "permission denied"}, status=403)
         except Exception as e:
             return Response({"error": str(e)}, status=400)
+
+    @action(detail=True, methods=["post"])
+    def pay(self, request, pk=None):
+        """买家付款 -> 状态：pending_receipt（待收货）"""
+        try:
+            order = self.get_object()
+            self._ensure_buyer(order)
+
+            if self._is_terminal(order.status):
+                return Response({"error": "order is terminal"}, status=400)
+
+            # 仅允许从待付款进入付款
+            if order.status not in {"pending_payment", "created"}:
+                return Response({"error": "invalid status"}, status=400)
+
+            order.status = "pending_receipt"
+            order.save(update_fields=["status"])
+            return Response({"order_id": order.id, "status": order.status})
+        except PermissionError:
+            return Response({"error": "permission denied"}, status=403)
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
+    @action(detail=True, methods=["post"])
+    def cancel_payment(self, request, pk=None):
+        """买家取消付款 -> 状态：refunded（已退款/取消），终态不可继续操作"""
+        try:
+            order = self.get_object()
+            self._ensure_buyer(order)
+
+            if self._is_terminal(order.status):
+                return Response({"order_id": order.id, "status": order.status})
+
+            # 允许在待付款阶段取消
+            if order.status not in {"created", "pending_payment"}:
+                return Response({"error": "invalid status"}, status=400)
+
+            order.status = "refunded"
+            order.save(update_fields=["status"])
+            return Response({"order_id": order.id, "status": order.status})
+        except PermissionError:
+            return Response({"error": "permission denied"}, status=403)
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
+    @action(detail=True, methods=["post"])
+    def ship(self, request, pk=None):
+        """卖家发货 -> 状态：shipped（待收货）"""
+        try:
+            order = self.get_object()
+            self._ensure_seller(order)
+
+            if self._is_terminal(order.status):
+                return Response({"error": "order is terminal"}, status=400)
+
+            # 仅允许已付款后的订单发货
+            if order.status not in {"pending_receipt"}:
+                return Response({"error": "invalid status"}, status=400)
+
+            order.status = "shipped"
+            order.save(update_fields=["status"])
+            return Response({"order_id": order.id, "status": order.status})
+        except PermissionError:
+            return Response({"error": "permission denied"}, status=403)
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
+    @action(detail=True, methods=["post"])
+    def refund(self, request, pk=None):
+        """买家退货退款 -> 状态：refunded（已退款/取消），终态不可继续操作"""
+        try:
+            order = self.get_object()
+            self._ensure_buyer(order)
+
+            if self._is_terminal(order.status):
+                return Response({"order_id": order.id, "status": order.status})
+
+            # 仅允许在待收货/已发货阶段退款
+            if order.status not in {"pending_receipt", "shipped"}:
+                return Response({"error": "invalid status"}, status=400)
+
+            order.status = "refunded"
+            order.save(update_fields=["status"])
+            return Response({"order_id": order.id, "status": order.status})
+        except PermissionError:
+            return Response({"error": "permission denied"}, status=403)
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
 
 class CategoryViewSet(ModelViewSet):
     """类目列表（market_category）"""

@@ -5,6 +5,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.exceptions import PermissionDenied
@@ -41,6 +43,8 @@ class SimpleTokenObtainPairSerializer(TokenObtainPairSerializer):
             "username": self.user.username,
             "nickname": getattr(self.user, "nickname", ""),
             "email": self.user.email,
+            "phone": getattr(self.user, "phone", None),
+            "address": getattr(self.user, "address", None),
             "role": getattr(self.user, "role", ""),
         }
         return data
@@ -76,6 +80,7 @@ class RegisterAPIView(APIView):
                         "nickname": getattr(user, "nickname", ""),
                         "email": user.email,
                         "phone": getattr(user, "phone", None),
+                        "address": getattr(user, "address", None),
                     },
                 },
                 status=status.HTTP_201_CREATED,
@@ -122,3 +127,37 @@ class AdminUserViewSet(ModelViewSet):
         if instance.pk == self.request.user.pk:
             raise PermissionDenied("不能删除当前登录的管理员账号")
         super().perform_destroy(instance)
+
+
+# 登出接口：通过拉黑 refresh token 实现登出。
+# 前端需要在 body 中传 refresh token。
+class LogoutAPIView(APIView):
+    """
+    登出接口：通过拉黑 refresh token 实现登出。
+    前端需要在 body 中传 refresh token。
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        refresh = request.data.get("refresh")
+        if not refresh:
+            return Response(
+                {"error": "refresh token required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            token = RefreshToken(refresh)
+            # 如果启用了 SimpleJWT blacklist，则会真正失效
+            try:
+                token.blacklist()
+            except AttributeError:
+                # 未启用 blacklist 时，忽略即可（由前端清理本地 token）
+                pass
+            return Response({"message": "ok"}, status=status.HTTP_200_OK)
+        except TokenError:
+            return Response(
+                {"error": "invalid refresh token"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )

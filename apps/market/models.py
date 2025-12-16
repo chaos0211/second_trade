@@ -592,10 +592,15 @@ class Order(models.Model):
 
     STATUS_CHOICES = (
         ("pending_payment", "待支付"),
+        # 兼容历史：保留 paid
         ("paid", "已支付/待发货"),
+        # 新增：付款后进入待收货（你当前业务描述里的“待收货”阶段）
+        ("pending_receipt", "待收货"),
         ("shipped", "已发货/待收货"),
         ("inspecting", "验机中"),
+        # 终态：确认收货
         ("completed", "已完成"),
+        # 终态：取消付款/退货退款
         ("refunded", "已退款/取消"),
     )
 

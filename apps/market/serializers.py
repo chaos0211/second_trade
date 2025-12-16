@@ -61,6 +61,58 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = "__all__"
 
+class OrderDetailSerializer(serializers.ModelSerializer):
+    # Embed key product fields for frontend order/payment pages
+    product_id = serializers.IntegerField(source="product.id", read_only=True)
+    product_title = serializers.CharField(source="product.title", read_only=True)
+    product_main_image = serializers.SerializerMethodField()
+    product_selling_price = serializers.DecimalField(source="product.selling_price", max_digits=10, decimal_places=2, read_only=True)
+    seller_id = serializers.IntegerField(source="product.seller_id", read_only=True)
+    buyer_address = serializers.CharField(source="buyer.address", read_only=True)
+    seller_address = serializers.CharField(source="product.seller.address", read_only=True)
+
+    created_at = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Order
+        fields = [
+            "id",
+            "order_no",
+            "status",
+            "buyer_id",
+            "buyer_address",
+            "seller_id",
+            "seller_address",
+            "product_id",
+            "product_title",
+            "product_main_image",
+            "product_selling_price",
+            "created_at",
+        ]
+
+    def get_product_main_image(self, obj):
+        try:
+            img = obj.product.images.order_by("sort_order", "id").first()
+            if not img:
+                return None
+            return f"/media/products/{img.image_name}"
+        except Exception:
+            return None
+
+    def get_created_at(self, obj):
+        dt = getattr(obj, "created_at", None)
+        if not dt:
+            return None
+        try:
+            bj = ZoneInfo("Asia/Shanghai")
+        except Exception:
+            bj = None
+        try:
+            dt_local = timezone.localtime(dt, bj) if bj else timezone.localtime(dt)
+        except Exception:
+            dt_local = dt
+        return dt_local.strftime("%Y-%m-%d %H:%M:%S")
+
 class DraftInitSerializer(serializers.Serializer):
     category_id = serializers.IntegerField()
     device_model_id = serializers.IntegerField(required=False, allow_null=True)
@@ -88,14 +140,49 @@ class PublishSerializer(serializers.Serializer):
 class ProductListSerializer(serializers.ModelSerializer):
     main_image = serializers.SerializerMethodField()
     created_at = serializers.SerializerMethodField()
+    seller_id = serializers.SerializerMethodField()
+    seller_name = serializers.SerializerMethodField()
+    seller_address = serializers.SerializerMethodField()
+    category_id = serializers.SerializerMethodField()
+    device_model_id = serializers.SerializerMethodField()
+
+    # Optional fields (may not exist as real model fields). Read from attrs or condition_data.
+    original_price = serializers.SerializerMethodField()
+    years_used = serializers.SerializerMethodField()
+    grade_label = serializers.SerializerMethodField()
+    grade_score = serializers.SerializerMethodField()
+    defects = serializers.SerializerMethodField()
+
+    estimated_min = serializers.SerializerMethodField()
+    estimated_max = serializers.SerializerMethodField()
+    estimated_mid = serializers.SerializerMethodField()
+    market_tag = serializers.SerializerMethodField()
+    diff_pct = serializers.SerializerMethodField()
+    value_score = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
         fields = [
             "id",
+            "seller_id",
+            "seller_name",
+            "seller_address",
+            "category_id",
+            "device_model_id",
             "title",
+            "description",
             "selling_price",
-            "estimated_price",
+            "original_price",
+            "years_used",
+            "grade_label",
+            "grade_score",
+            "defects",
+            "estimated_min",
+            "estimated_max",
+            "estimated_mid",
+            "market_tag",
+            "diff_pct",
+            "value_score",
             "status",
             "view_count",
             "favorite_count",
@@ -127,3 +214,106 @@ class ProductListSerializer(serializers.ModelSerializer):
             dt_local = dt
 
         return dt_local.strftime("%Y-%m-%d %H:%M:%S")
+
+    def get_seller_id(self, obj):
+        # Product.seller is expected
+        return getattr(obj, "seller_id", None)
+
+    def get_seller_name(self, obj):
+        seller = getattr(obj, "seller", None)
+        if not seller:
+            return None
+        # Prefer nickname, then username
+        nick = getattr(seller, "nickname", None)
+        if nick:
+            return nick
+        return getattr(seller, "username", None)
+
+    def get_seller_address(self, obj):
+        seller = getattr(obj, "seller", None)
+        if not seller:
+            return None
+        return getattr(seller, "address", None)
+
+    def get_category_id(self, obj):
+        # Prefer explicit field; fall back via device_model->brand->category
+        cid = getattr(obj, "category_id", None)
+        if cid is not None:
+            return cid
+        try:
+            return obj.device_model.brand.category_id
+        except Exception:
+            return None
+
+    def get_device_model_id(self, obj):
+        return getattr(obj, "device_model_id", None)
+
+    def _cond(self, obj):
+        cd = getattr(obj, "condition_data", None)
+        return cd if isinstance(cd, dict) else {}
+
+    def get_original_price(self, obj):
+        v = getattr(obj, "original_price", None)
+        if v is not None:
+            return v
+        return self._cond(obj).get("original_price")
+
+    def get_years_used(self, obj):
+        v = getattr(obj, "years_used", None)
+        if v is not None:
+            return v
+        return self._cond(obj).get("years_used")
+
+    def get_grade_label(self, obj):
+        v = getattr(obj, "grade_label", None)
+        if v is not None:
+            return v
+        return self._cond(obj).get("grade_label")
+
+    def get_grade_score(self, obj):
+        v = getattr(obj, "grade_score", None)
+        if v is not None:
+            return v
+        return self._cond(obj).get("grade_score")
+
+    def get_defects(self, obj):
+        v = getattr(obj, "defects", None)
+        if v is not None:
+            return v
+        return self._cond(obj).get("defects")
+
+    def get_estimated_min(self, obj):
+        v = getattr(obj, "estimated_min", None)
+        if v is not None:
+            return v
+        return self._cond(obj).get("estimated_min")
+
+    def get_estimated_max(self, obj):
+        v = getattr(obj, "estimated_max", None)
+        if v is not None:
+            return v
+        return self._cond(obj).get("estimated_max")
+
+    def get_estimated_mid(self, obj):
+        v = getattr(obj, "estimated_mid", None)
+        if v is not None:
+            return v
+        return self._cond(obj).get("estimated_mid")
+
+    def get_market_tag(self, obj):
+        v = getattr(obj, "market_tag", None)
+        if v is not None:
+            return v
+        return self._cond(obj).get("market_tag")
+
+    def get_diff_pct(self, obj):
+        v = getattr(obj, "diff_pct", None)
+        if v is not None:
+            return v
+        return self._cond(obj).get("diff_pct")
+
+    def get_value_score(self, obj):
+        v = getattr(obj, "value_score", None)
+        if v is not None:
+            return v
+        return self._cond(obj).get("value_score")

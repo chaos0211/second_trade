@@ -19,12 +19,14 @@ class RegisterSerializer(serializers.ModelSerializer):
             "email",
             "phone",
             "nickname",
+            "address",
         ]
         extra_kwargs = {
             "password": {"write_only": True},
             "email": {"required": False, "allow_blank": True},
             "phone": {"required": False, "allow_blank": True},
             "nickname": {"required": False, "allow_blank": True},
+            "address": {"required": False, "allow_blank": True},
         }
 
     def create(self, validated_data):
@@ -46,6 +48,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "nickname",
             "email",
             "phone",
+            "address",
             "role",
             "credit_score",
             "balance",
@@ -67,6 +70,7 @@ class AdminUserListSerializer(serializers.ModelSerializer):
             "nickname",
             "email",
             "phone",
+            "address",
             "role",
             "credit_score",
             "balance",
@@ -98,6 +102,7 @@ class AdminUserWriteSerializer(serializers.ModelSerializer):
             "nickname",
             "email",
             "phone",
+            "address",
             "role",
             "credit_score",
             "balance",

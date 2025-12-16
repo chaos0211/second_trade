@@ -89,3 +89,92 @@ export async function publishDraft(draftKey: string, payload: PublishReq): Promi
   const res = await http.post(`/api/market/drafts/${draftKey}/publish/`, payload);
   return res.data;
 }
+
+// -------------------------
+// Orders (purchase flow)
+// -------------------------
+
+export type CreateTradeReq = {
+  product_id: number;
+};
+
+export type CreateTradeResp = {
+  order_id: number;
+  order_no: string;
+  status: string;
+  product_id: number;
+};
+
+export async function createTrade(payload: CreateTradeReq): Promise<CreateTradeResp> {
+  const res = await http.post("/api/market/orders/create_trade/", payload);
+  return res.data;
+}
+
+export type OrderActionResp = {
+  order_id: number;
+  status: string;
+};
+
+export async function payOrder(orderId: number): Promise<OrderActionResp> {
+  const res = await http.post(`/api/market/orders/${orderId}/pay/`);
+  return res.data;
+}
+
+export async function cancelPayment(orderId: number): Promise<OrderActionResp> {
+  const res = await http.post(`/api/market/orders/${orderId}/cancel_payment/`);
+  return res.data;
+}
+
+export async function shipOrder(orderId: number): Promise<OrderActionResp> {
+  const res = await http.post(`/api/market/orders/${orderId}/ship/`);
+  return res.data;
+}
+
+export async function confirmReceipt(orderId: number): Promise<OrderActionResp> {
+  const res = await http.post(`/api/market/orders/${orderId}/confirm_receipt/`);
+  return res.data;
+}
+
+export async function refundOrder(orderId: number): Promise<OrderActionResp> {
+  const res = await http.post(`/api/market/orders/${orderId}/refund/`);
+  return res.data;
+}
+
+export type OrderListItem = {
+  id: number;
+  order_no: string;
+  status: string;
+  buyer_id?: number;
+  seller_id?: number;
+  product_id: number;
+  product_title?: string;
+  product_main_image?: string;
+  product_selling_price?: string | number;
+  created_at?: string;
+};
+
+export async function listBuyerOrders(): Promise<OrderListItem[]> {
+  const res = await http.get("/api/market/orders/buy/");
+  return res.data;
+}
+
+export async function listSellerOrders(): Promise<OrderListItem[]> {
+  const res = await http.get("/api/market/orders/sell/");
+  return res.data;
+}
+
+export async function getOrderDetail(orderId: number): Promise<OrderListItem> {
+  const res = await http.get(`/api/market/orders/${orderId}/`);
+  return res.data;
+}
+
+// -------------------------
+// Products (detail)
+// -------------------------
+
+export type ProductDetail = any;
+
+export async function getProductDetail(productId: number): Promise<ProductDetail> {
+  const res = await http.get(`/api/market/products/${productId}/`);
+  return res.data;
+}

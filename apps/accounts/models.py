@@ -22,6 +22,12 @@ class User(AbstractUser):
         null=True,
         help_text="手机号（可选）",
     )
+    address = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="默认收货/发货地址",
+    )
     nickname = models.CharField(
         max_length=30,
         blank=True,

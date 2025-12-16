@@ -63,28 +63,39 @@
 import { computed, onMounted, ref } from "vue";
 import OrderTable from "@/components/orders/OrderTable.vue";
 import OrderDetailModal from "@/components/orders/OrderDetailModal.vue";
+import {
+  listBuyerOrders,
+  listSellerOrders,
+  getOrderDetail,
+  payOrder,
+  shipOrder,
+  confirmReceipt,
+  refundOrder,
+} from "@/api/market";
 
-type Status = "pending" | "paid" | "completed" | "canceled";
+type Status = "pending_payment" | "pending_receipt" | "shipped" | "completed" | "refunded" | "received";
 type Tab = "bought" | "sold";
 
 type OrderItem = {
-  id: string;
+  id: number;
+  order_no: string;
+  status: Status;
+  // purchase info
+  purchaseTime: string;
+  purchasePrice: number;
+  // product summary
   product: {
-    id: string;
+    id: number;
     title: string;
     specs: string;
     images: string[];
     thumbnail: string;
   };
-  time: string;
-  price: number;
-  status: Status;
-  buyer: string;
-  seller: string;
-  logisticsNumber: string;
-  createTime: string;
-  paymentTime: string;
-  completionTime: string;
+  // parties
+  buyerName?: string;
+  sellerName?: string;
+  buyerAddress?: string;
+  sellerAddress?: string;
 };
 
 const tab = ref<Tab>("bought");
@@ -96,71 +107,76 @@ const detailOpen = ref(false);
 const detailOrder = ref<OrderItem | null>(null);
 
 // ====== 下面这份 mock 数据结构严格沿用 a.html（你后面换成真实接口时只要保持字段名即可）=====
-const mockOrders = ref<Record<Tab, OrderItem[]>>({
-  bought: [
-    {
-      id: "ORD20250115001",
-      product: {
-        id: "PROD1001",
-        title: "Apple iPhone 14 Pro 256GB 星光色",
-        specs: "品牌：Apple | 型号：iPhone 14 Pro | 容量：256GB | 颜色：星光色 | 成色：99新",
-        images: [
-          "https://design.gemcoder.com/staticResource/echoAiSystemImages/98628ca8f8f03decbb85fc075735f4a7.png",
-          "https://design.gemcoder.com/staticResource/echoAiSystemImages/35bed43088426e24ed2e0c8460b97a84.png",
-          "https://design.gemcoder.com/staticResource/echoAiSystemImages/272058d13a3dda6c167ff9dcbaf2fa20.png",
-          "https://design.gemcoder.com/staticResource/echoAiSystemImages/b2291d128062d132c0c1c60f5662571a.png",
-        ],
-        thumbnail:
-          "https://design.gemcoder.com/staticResource/echoAiSystemImages/28ba681c048e09cf3bd9059065e07f5a.png",
-      },
-      time: "2025-01-15 14:20",
-      price: 7999,
-      status: "paid",
-      buyer: "张小明",
-      seller: "科技数码专营店",
-      logisticsNumber: "SF1234567890123",
-      createTime: "2025-01-15 14:15",
-      paymentTime: "2025年01月15日 14:20",
-      completionTime: "",
-    },
-  ],
-  sold: [
-    {
-      id: "ORD20250114001",
-      product: {
-        id: "PROD2001",
-        title: "微软 Surface Pro 9 i5 8GB+256GB",
-        specs: "品牌：微软 | 型号：Surface Pro 9 | 配置：i5/8GB/256GB | 成色：95新",
-        images: [
-          "https://design.gemcoder.com/staticResource/echoAiSystemImages/32c66da6e722d6140d060f052e8b3caa.png",
-          "https://design.gemcoder.com/staticResource/echoAiSystemImages/8421fc4ede212c013d2b8eda2ee2e259.png",
-        ],
-        thumbnail:
-          "https://design.gemcoder.com/staticResource/echoAiSystemImages/efeef04452439f8cabd68a0872c3a32d.png",
-      },
-      time: "2025-01-14 10:30",
-      price: 5999,
-      status: "paid",
-      buyer: "李华",
-      seller: "张小明",
-      logisticsNumber: "SF1234567890456",
-      createTime: "2025-01-14 10:20",
-      paymentTime: "2025年01月14日 10:30",
-      completionTime: "",
-    },
-  ],
-});
+const allOrders = ref<Record<Tab, OrderItem[]>>({ bought: [], sold: [] });
 
-function loadOrders() {
+const API_ORIGIN = (import.meta as any).env?.VITE_API_ORIGIN || "http://127.0.0.1:8000";
+const toAbsUrl = (u: string) => {
+  if (!u) return "";
+  if (u.startsWith("http://") || u.startsWith("https://")) return u;
+  if (u.startsWith("/")) return `${API_ORIGIN}${u}`;
+  return `${API_ORIGIN}/${u}`;
+};
+
+function toPurchaseTime(o: any) {
+  // Prefer paid time if backend provides it; fall back to created_at
+  return o?.paid_at || o?.payment_time || o?.created_at || "";
+}
+
+function toPrice(o: any) {
+  const v = o?.product_selling_price ?? o?.product?.selling_price ?? o?.price ?? 0;
+  const n = typeof v === "string" ? Number(v) : v;
+  return Number.isFinite(n) ? n : 0;
+}
+
+function toSpecs(o: any) {
+  // Keep it short; table cell will truncate.
+  const parts: string[] = [];
+  if (o?.grade_label) parts.push(`成色：${o.grade_label}`);
+  if (o?.years_used !== undefined && o?.years_used !== null) parts.push(`使用：${o.years_used}年`);
+  if (o?.category_name) parts.push(o.category_name);
+  if (o?.device_model_name) parts.push(o.device_model_name);
+  return parts.join(" | ");
+}
+
+function normalizeOrder(o: any): OrderItem {
+  const img = o?.product_main_image || o?.main_image || o?.product?.main_image || "";
+  const thumb = img ? toAbsUrl(img) : "";
+  const title = o?.product_title || o?.product?.title || "";
+
+  return {
+    id: Number(o?.id),
+    order_no: String(o?.order_no ?? ""),
+    status: (o?.status === "received" ? "completed" : o?.status) as Status,
+    purchaseTime: toPurchaseTime(o),
+    purchasePrice: toPrice(o),
+    product: {
+      id: Number(o?.product_id ?? o?.product?.id),
+      title,
+      specs: toSpecs(o),
+      images: thumb ? [thumb] : [],
+      thumbnail: thumb,
+    },
+    buyerName: o?.buyer_name,
+    sellerName: o?.seller_name,
+    buyerAddress: o?.buyer_address,
+    sellerAddress: o?.seller_address,
+  };
+}
+
+async function loadOrders() {
   loading.value = true;
-  setTimeout(() => {
+  try {
+    const data = tab.value === "bought" ? await listBuyerOrders() : await listSellerOrders();
+    const normalized = (Array.isArray(data) ? data : []).map((o: any) => normalizeOrder(o));
+    allOrders.value[tab.value] = normalized;
+  } finally {
     loading.value = false;
-  }, 500);
+  }
 }
 
 onMounted(loadOrders);
 
-const currentOrdersAll = computed(() => mockOrders.value[tab.value] || []);
+const currentOrdersAll = computed(() => allOrders.value[tab.value] || []);
 const totalPages = computed(() => Math.max(1, Math.ceil(currentOrdersAll.value.length / pageSize.value)));
 
 const currentOrders = computed(() => {
@@ -181,12 +197,20 @@ function changePage(p: number) {
   page.value = p;
 }
 
-function openOrderDetail(orderId: string) {
+async function openOrderDetail(orderId: number) {
   const found = currentOrdersAll.value.find((o) => o.id === orderId) || null;
-  if (!found) return;
   detailOrder.value = found;
   detailOpen.value = true;
   document.body.style.overflow = "hidden";
+
+  try {
+    const detail = await getOrderDetail(orderId);
+    // merge detail fields back
+    const merged = normalizeOrder({ ...(detail as any), ...(detailOrder.value as any) });
+    detailOrder.value = merged;
+  } catch {
+    // ignore; keep summary
+  }
 }
 
 function closeModal() {
@@ -198,14 +222,18 @@ function closeModal() {
 // ====== 状态工具：保持与 a.html 一致 ======
 function getStatusClass(status?: Status) {
   switch (status) {
-    case "pending":
+    case "pending_payment":
       return "bg-warning/10 text-warning";
-    case "paid":
+    case "pending_receipt":
+      return "bg-primary/10 text-primary";
+    case "shipped":
       return "bg-primary/10 text-primary";
     case "completed":
       return "bg-success/10 text-success";
-    case "canceled":
+    case "refunded":
       return "bg-danger/10 text-danger";
+    case "received":
+      return "bg-success/10 text-success";
     default:
       return "bg-neutral-100 text-neutral-500";
   }
@@ -213,14 +241,18 @@ function getStatusClass(status?: Status) {
 
 function getStatusText(status?: Status) {
   switch (status) {
-    case "pending":
+    case "pending_payment":
       return "待付款";
-    case "paid":
-      return "已付款";
+    case "pending_receipt":
+      return "待收货";
+    case "shipped":
+      return "已发货";
     case "completed":
       return "已完成";
-    case "canceled":
-      return "已取消";
+    case "refunded":
+      return "已退款";
+    case "received":
+      return "已完成";
     default:
       return "未知状态";
   }
@@ -228,68 +260,56 @@ function getStatusText(status?: Status) {
 
 function getActionButtons(status?: Status) {
   const buttons: { text: string; className: string; action: string }[] = [];
-  switch (status) {
-    case "pending":
+
+  if (!status) return buttons;
+
+  if (tab.value === "bought") {
+    // buyer actions
+    if (status === "pending_payment") {
       buttons.push({ text: "去支付", className: "btn-primary", action: "pay" });
-      buttons.push({ text: "取消订单", className: "btn-danger", action: "cancel" });
-      break;
-    case "paid":
+    }
+    if (status === "pending_receipt" || status === "shipped") {
       buttons.push({ text: "确认收货", className: "btn-primary", action: "confirm" });
       buttons.push({ text: "申请退款", className: "btn-secondary", action: "refund" });
-      break;
-    case "completed":
-      buttons.push({ text: "查看详情", className: "btn-secondary", action: "detail" });
-      buttons.push({ text: "再次购买", className: "btn-primary", action: "repurchase" });
-      break;
-    case "canceled":
-      buttons.push({ text: "删除记录", className: "btn-secondary", action: "delete" });
-      buttons.push({ text: "再次购买", className: "btn-primary", action: "repurchase" });
-      break;
+    }
+  } else {
+    // seller actions
+    if (status === "pending_receipt") {
+      buttons.push({ text: "发货", className: "btn-primary", action: "ship" });
+    }
   }
+
   return buttons;
 }
 
-// ====== 订单操作：先保持 a.html 的行为（alert/confirm），后面你再接真实接口 ======
-function handleOrderAction(orderId: string | undefined, action: string) {
+async function handleOrderAction(orderId: number | undefined, action: string) {
   if (!orderId) return;
-  const list = mockOrders.value[tab.value];
-  const order = list.find((o) => o.id === orderId);
-  if (!order) return;
 
-  switch (action) {
-    case "pay":
-      alert(`去支付订单:${order.id}`);
-      break;
-    case "cancel":
-      if (confirm(`确定要取消订单${order.id}吗？`)) order.status = "canceled";
-      break;
-    case "confirm":
-      if (confirm(`确定要确认收货订单${order.id}吗？`)) {
-        order.status = "completed";
-        order.completionTime = new Date().toLocaleString("zh-CN", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        });
+  try {
+    if (action === "pay") {
+      await payOrder(orderId);
+    } else if (action === "ship") {
+      await shipOrder(orderId);
+    } else if (action === "confirm") {
+      await confirmReceipt(orderId);
+    } else if (action === "refund") {
+      await refundOrder(orderId);
+    }
+
+    // refresh current tab list
+    await loadOrders();
+
+    // refresh detail if open
+    if (detailOpen.value && detailOrder.value?.id === orderId) {
+      try {
+        const d = await getOrderDetail(orderId);
+        detailOrder.value = normalizeOrder(d as any);
+      } catch {
+        // ignore
       }
-      break;
-    case "refund":
-      alert(`申请退款订单:${order.id}`);
-      break;
-    case "detail":
-      openOrderDetail(order.id);
-      break;
-    case "repurchase":
-      alert(`再次购买商品:${order.product.title}`);
-      break;
-    case "delete":
-      if (confirm(`确定要删除订单记录${order.id}吗？`)) {
-        mockOrders.value[tab.value] = list.filter((o) => o.id !== order.id);
-        closeModal();
-      }
-      break;
+    }
+  } catch (e: any) {
+    alert(e?.message || "操作失败");
   }
 }
 </script>

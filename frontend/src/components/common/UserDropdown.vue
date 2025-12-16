@@ -21,10 +21,38 @@
           <i class="fas fa-cog mr-2"></i>设置
         </a>
         <div class="border-t border-light-2 my-1"></div>
-        <a href="javascript:void(0);" class="block px-4 py-2 text-sm text-danger hover:bg-light-3">
+        <a
+          href="javascript:void(0);"
+          class="block px-4 py-2 text-sm text-danger hover:bg-light-3"
+          @click="handleLogout"
+        >
           <i class="fas fa-sign-out-alt mr-2"></i>退出登录
         </a>
       </div>
     </div>
   </div>
 </template>
+
+<script setup lang="ts">
+import { useRouter } from 'vue-router'
+import http from '@/api/http'
+
+const router = useRouter()
+
+const handleLogout = async () => {
+  try {
+    const refresh = localStorage.getItem('refresh')
+    if (refresh) {
+      await http.post('/api/auth/logout/', { refresh })
+    }
+  } catch (e) {
+    // ignore errors; logout should still proceed locally
+  } finally {
+    localStorage.removeItem('access')
+    localStorage.removeItem('refresh')
+    // optional: clear any cached user info
+    localStorage.removeItem('user')
+    router.replace('/login')
+  }
+}
+</script>

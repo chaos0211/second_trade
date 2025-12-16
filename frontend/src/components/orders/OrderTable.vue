@@ -7,9 +7,9 @@
     <div
       class="hidden md:grid md:grid-cols-12 px-6 py-4 bg-neutral-50 border-b border-neutral-200 text-neutral-500 font-medium"
     >
-      <div class="col-span-4">商品信息</div>
-      <div class="col-span-2">成交时间</div>
-      <div class="col-span-2">成交价格</div>
+      <div class="col-span-3">商品信息</div>
+      <div class="col-span-3">购买时间</div>
+      <div class="col-span-2">购买价格</div>
       <div class="col-span-2">订单状态</div>
       <div class="col-span-2 text-right">操作</div>
     </div>
@@ -23,62 +23,99 @@
         :data-order-id="o.id"
       >
         <div class="p-4 md:p-6">
-          <div class="flex flex-col md:flex-row md:items-center gap-4">
-            <!-- 商品信息 -->
-            <div class="flex-1 flex items-center gap-4">
-              <div
-                class="relative w-16 h-16 rounded-lg overflow-hidden border border-neutral-200 flex-shrink-0 cursor-pointer order-thumbnail"
-                :data-order-id="o.id"
-                @click="$emit('open', o.id)"
-              >
-                <img :src="o.product.thumbnail" :alt="o.product.title" class="w-full h-full object-cover" />
+          <div class="flex flex-col gap-4">
+            <!-- 移动端信息（保持不变） -->
+            <div class="md:hidden">
+              <div class="flex items-start gap-4">
+                <div
+                  class="relative w-16 h-16 rounded-lg overflow-hidden border border-neutral-200 flex-shrink-0 cursor-pointer order-thumbnail"
+                  :data-order-id="o.id"
+                  @click="$emit('open', o.id)"
+                >
+                  <img :src="o.product.thumbnail" :alt="o.product.title" class="w-full h-full object-cover" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <h3 class="font-medium text-neutral-700 truncate" :title="o.product?.title || ''">{{ o.product?.title || '-' }}</h3>
+                  <p class="text-neutral-400 text-sm mt-1 truncate" :title="o.product?.specs || ''">{{ o.product?.specs || '' }}</p>
+                </div>
               </div>
-              <div class="flex-1 min-w-0">
-                <h3 class="font-medium text-neutral-700 truncate">{{ o.product.title }}</h3>
-                <p class="text-neutral-400 text-sm mt-1 line-clamp-2">{{ o.product.specs }}</p>
+
+              <div class="grid grid-cols-2 gap-y-2 gap-x-4 w-full mt-4">
+                <div>
+                  <p class="text-neutral-400 text-sm">购买时间</p>
+                  <p class="text-neutral-700">{{ formatTime(o.purchaseTime) }}</p>
+                </div>
+                <div>
+                  <p class="text-neutral-400 text-sm">购买价格</p>
+                  <p class="text-danger font-bold text-lg">¥{{ formatPrice(o.purchasePrice) }}</p>
+                </div>
+                <div class="col-span-2">
+                  <p class="text-neutral-400 text-sm">订单状态</p>
+                  <span class="badge-pill" :class="getStatusClass(o.status)">{{ getStatusText(o.status) }}</span>
+                </div>
+
+                <div class="col-span-2 flex justify-end flex-wrap gap-2 mt-2">
+                  <button
+                    v-for="btn in getActionButtons(o.status)"
+                    :key="btn.action"
+                    class="btn"
+                    :class="btn.className"
+                    type="button"
+                    :data-action="btn.action"
+                    @click.stop="$emit('action', o.id, btn.action)"
+                  >
+                    {{ btn.text }}
+                  </button>
+                </div>
               </div>
             </div>
 
-            <!-- 移动端信息 -->
-            <div class="md:hidden grid grid-cols-2 gap-y-2 gap-x-4 w-full">
-              <div>
-                <p class="text-neutral-400 text-sm">成交时间</p>
-                <p class="text-neutral-700">{{ o.time }}</p>
+            <!-- 桌面端信息：12列固定布局，和表头对齐 -->
+            <div class="hidden md:grid md:grid-cols-12 md:items-center md:gap-4">
+              <!-- 商品信息 -->
+              <div class="col-span-3 flex items-center gap-4 min-w-0">
+                <div
+                  class="relative w-16 h-16 rounded-lg overflow-hidden border border-neutral-200 flex-shrink-0 cursor-pointer order-thumbnail"
+                  :data-order-id="o.id"
+                  @click="$emit('open', o.id)"
+                >
+                  <img :src="o.product.thumbnail" :alt="o.product.title" class="w-full h-full object-cover" />
+                </div>
+                <div class="min-w-0">
+                  <h3 class="font-medium text-neutral-700 truncate" :title="o.product?.title || ''">{{ o.product?.title || '-' }}</h3>
+                  <p class="text-neutral-400 text-sm mt-1 truncate" :title="o.product?.specs || ''">{{ o.product?.specs || '' }}</p>
+                </div>
               </div>
-              <div>
-                <p class="text-neutral-400 text-sm">成交价格</p>
-                <p class="text-danger font-bold text-lg">¥{{ o.price.toLocaleString() }}</p>
+
+              <!-- 购买时间 -->
+              <div class="col-span-3 text-left">
+                <p class="text-neutral-700 whitespace-nowrap">{{ formatTime(o.purchaseTime) }}</p>
               </div>
-              <div class="col-span-2">
-                <p class="text-neutral-400 text-sm">订单状态</p>
+
+              <!-- 购买价格 -->
+              <div class="col-span-2 text-left">
+                <p class="text-danger font-bold text-lg whitespace-nowrap">¥{{ formatPrice(o.purchasePrice) }}</p>
+              </div>
+
+              <!-- 订单状态 -->
+              <div class="col-span-2 text-left">
                 <span class="badge-pill" :class="getStatusClass(o.status)">{{ getStatusText(o.status) }}</span>
               </div>
-            </div>
 
-            <!-- 桌面端信息 -->
-            <div class="hidden md:block md:text-center w-24">
-              <p class="text-neutral-700">{{ o.time }}</p>
-            </div>
-            <div class="hidden md:block md:text-center w-24">
-              <p class="text-danger font-bold text-lg">¥{{ o.price.toLocaleString() }}</p>
-            </div>
-            <div class="hidden md:block md:text-center w-24">
-              <span class="badge-pill" :class="getStatusClass(o.status)">{{ getStatusText(o.status) }}</span>
-            </div>
-
-            <!-- 操作 -->
-            <div class="flex justify-end flex-wrap gap-2">
-              <button
-                v-for="btn in getActionButtons(o.status)"
-                :key="btn.action"
-                class="btn"
-                :class="btn.className"
-                type="button"
-                :data-action="btn.action"
-                @click.stop="$emit('action', o.id, btn.action)"
-              >
-                {{ btn.text }}
-              </button>
+              <!-- 操作 -->
+              <div class="col-span-2 flex justify-end flex-wrap gap-2">
+                <button
+                  v-for="btn in getActionButtons(o.status)"
+                  :key="btn.action"
+                  class="btn"
+                  :class="btn.className"
+                  type="button"
+                  :data-action="btn.action"
+                  @click.stop="$emit('action', o.id, btn.action)"
+                >
+                  {{ btn.text }}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -169,14 +206,38 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-type Status = "pending" | "paid" | "completed" | "canceled";
+const formatTime = (v: any) => {
+  if (!v) return "-";
+  if (typeof v === "string") return v;
+  try {
+    if (v instanceof Date) return v.toLocaleString();
+    if (typeof v?.toLocaleString === "function") return v.toLocaleString();
+  } catch {
+    // ignore
+  }
+  return String(v);
+};
+
+const formatPrice = (v: any) => {
+  if (v === null || v === undefined || v === "") return "-";
+  const n = typeof v === "number" ? v : Number(v);
+  if (Number.isFinite(n)) return n.toLocaleString();
+  return String(v);
+};
+
+type Status = "pending_payment" | "pending_receipt" | "shipped" | "completed" | "refunded";
 
 type OrderItem = {
-  id: string;
-  product: { title: string; specs: string; images: string[]; thumbnail: string };
-  time: string;
-  price: number;
+  id: number;
+  order_no: string;
   status: Status;
+  purchaseTime: string;
+  purchasePrice: number;
+  product: { id: number; title: string; specs: string; images: string[]; thumbnail: string };
+  buyerName?: string;
+  sellerName?: string;
+  buyerAddress?: string;
+  sellerAddress?: string;
 };
 
 const props = defineProps<{
@@ -189,8 +250,8 @@ const props = defineProps<{
 
 defineEmits<{
   (e: "page", p: number): void;
-  (e: "open", orderId: string): void;
-  (e: "action", orderId: string, action: string): void;
+  (e: "open", orderId: number): void;
+  (e: "action", orderId: number, action: string): void;
 }>();
 
 // 注意：这里 totalAll / totalPages / rangeText 需要父组件提供总量的话也行；
@@ -243,13 +304,14 @@ const pageNumbers = computed(() => {
 // ===== 状态/按钮：保持 a.html 一致 =====
 function getStatusClass(status: Status) {
   switch (status) {
-    case "pending":
+    case "pending_payment":
       return "bg-warning/10 text-warning";
-    case "paid":
+    case "pending_receipt":
+    case "shipped":
       return "bg-primary/10 text-primary";
     case "completed":
       return "bg-success/10 text-success";
-    case "canceled":
+    case "refunded":
       return "bg-danger/10 text-danger";
     default:
       return "bg-neutral-100 text-neutral-500";
@@ -257,38 +319,37 @@ function getStatusClass(status: Status) {
 }
 function getStatusText(status: Status) {
   switch (status) {
-    case "pending":
+    case "pending_payment":
       return "待付款";
-    case "paid":
-      return "已付款";
+    case "pending_receipt":
+      return "待收货";
+    case "shipped":
+      return "已发货";
     case "completed":
       return "已完成";
-    case "canceled":
-      return "已取消";
+    case "refunded":
+      return "已退款";
     default:
       return "未知状态";
   }
 }
 function getActionButtons(status: Status) {
   const buttons: { text: string; className: string; action: string }[] = [];
-  switch (status) {
-    case "pending":
+
+  if (props.tab === "bought") {
+    if (status === "pending_payment") {
       buttons.push({ text: "去支付", className: "btn-primary", action: "pay" });
-      buttons.push({ text: "取消订单", className: "btn-danger", action: "cancel" });
-      break;
-    case "paid":
+    }
+    if (status === "pending_receipt" || status === "shipped") {
       buttons.push({ text: "确认收货", className: "btn-primary", action: "confirm" });
       buttons.push({ text: "申请退款", className: "btn-secondary", action: "refund" });
-      break;
-    case "completed":
-      buttons.push({ text: "查看详情", className: "btn-secondary", action: "detail" });
-      buttons.push({ text: "再次购买", className: "btn-primary", action: "repurchase" });
-      break;
-    case "canceled":
-      buttons.push({ text: "删除记录", className: "btn-secondary", action: "delete" });
-      buttons.push({ text: "再次购买", className: "btn-primary", action: "repurchase" });
-      break;
+    }
+  } else {
+    if (status === "pending_receipt") {
+      buttons.push({ text: "发货", className: "btn-primary", action: "ship" });
+    }
   }
+
   return buttons;
 }
 </script>
