@@ -100,6 +100,28 @@ class ProfileAPIView(APIView):
         return Response(serializer.data)
 
 
+    def put(self, request):
+        """更新当前登录用户信息（支持部分字段更新）。"""
+        user = request.user
+        data = request.data.copy()
+
+        # 密码单独处理：避免明文落库
+        raw_password = data.pop("password", None)
+
+        serializer = UserProfileSerializer(user, data=data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer.save()
+
+        if raw_password:
+            user.set_password(raw_password)
+            user.save(update_fields=["password"])
+
+        # 重新序列化返回最新数据
+        return Response(UserProfileSerializer(user).data, status=status.HTTP_200_OK)
+
+
 
 
 class IsPlatformAdmin(BasePermission):

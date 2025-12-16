@@ -44,6 +44,15 @@
             />
           </FieldRow>
 
+          <FieldRow label="地址">
+            <input
+              v-model.trim="form.address"
+              class="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#165DFF]/30"
+              type="text"
+              placeholder="请输入收货地址"
+            />
+          </FieldRow>
+
           <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div class="text-sm text-slate-600 mb-3">
               密码修改为可选项：留空表示不修改
@@ -54,7 +63,6 @@
                 v-model="form.password"
                 class="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#165DFF]/30"
                 type="password"
-                placeholder="请输入新密码（可选）"
               />
             </FieldRow>
 
@@ -74,11 +82,18 @@
         </div>
       </div>
 
+      <div v-if="apiError" class="px-6 pb-2">
+        <div class="rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm px-4 py-3">
+          {{ apiError }}
+        </div>
+      </div>
+
       <!-- Footer -->
       <div class="px-6 py-4 border-t border-slate-200 bg-white flex items-center justify-end gap-3">
         <button
           type="button"
-          class="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition"
+          class="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          :disabled="submitting"
           @click="emit('close')"
         >
           取消
@@ -93,7 +108,7 @@
           :disabled="!canSubmit"
           @click="submit"
         >
-          确认修改
+          {{ submitting ? '提交中…' : '确认修改' }}
         </button>
       </div>
     </div>
@@ -101,13 +116,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, reactive, watch } from "vue";
+import { computed, defineComponent, h, reactive, ref, watch } from "vue";
+import http from "@/api/http";
 
 type Profile = {
   username: string;
   nickname: string;
   email: string;
   phone: string;
+  address: string;
 };
 
 const props = defineProps<{
@@ -117,22 +134,27 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "close"): void;
-  (e: "submit", payload: { nickname: string; email: string; phone: string; password?: string }): void;
+  (e: "submit", payload: { nickname: string; email: string; phone: string; address: string; password?: string }): void;
 }>();
 
 const original = reactive({
   nickname: "",
   email: "",
   phone: "",
+  address: "",
 });
 
 const form = reactive({
   nickname: "",
   email: "",
   phone: "",
+  address: "",
   password: "",
   password2: "",
 });
+
+const submitting = ref(false);
+const apiError = ref("");
 
 watch(
   () => props.open,
@@ -142,12 +164,16 @@ watch(
     original.nickname = props.profile.nickname || "";
     original.email = props.profile.email || "";
     original.phone = props.profile.phone || "";
+    original.address = props.profile.address || "";
 
     form.nickname = original.nickname;
     form.email = original.email;
     form.phone = original.phone;
+    form.address = original.address;
     form.password = "";
     form.password2 = "";
+
+    apiError.value = "";
   },
   { immediate: true }
 );
@@ -157,6 +183,7 @@ const dirty = computed(() => {
     form.nickname !== original.nickname ||
     form.email !== original.email ||
     form.phone !== original.phone ||
+    form.address !== original.address ||
     !!form.password ||
     !!form.password2
   );
@@ -169,20 +196,52 @@ const passwordError = computed(() => {
 });
 
 const canSubmit = computed(() => {
+  if (submitting.value) return false;
   if (!dirty.value) return false;
   if (passwordError.value) return false;
-  // 允许用户不改密码
   return true;
 });
 
-function submit() {
+async function submit() {
   if (!canSubmit.value) return;
-  emit("submit", {
-    nickname: form.nickname,
-    email: form.email,
-    phone: form.phone,
-    password: form.password ? form.password : undefined,
-  });
+  apiError.value = "";
+  submitting.value = true;
+
+  try {
+    const body: any = {
+      nickname: form.nickname,
+      email: form.email,
+      phone: form.phone,
+      address: form.address,
+    };
+    if (form.password) body.password = form.password;
+
+    // 后端：PUT /api/auth/me （无斜杠）
+    const resp: any = await http.put("/api/auth/me", body);
+    const data: any = resp?.data ?? resp;
+
+    // 让父组件可选择刷新
+    emit("submit", {
+      nickname: data?.nickname ?? form.nickname,
+      email: data?.email ?? form.email,
+      phone: data?.phone ?? form.phone,
+      address: data?.address ?? form.address,
+      password: undefined,
+    });
+
+    emit("close");
+  } catch (e: any) {
+    const d = e?.response?.data;
+    apiError.value =
+      (typeof d === "string" && d) ||
+      d?.detail ||
+      d?.error ||
+      (d && JSON.stringify(d)) ||
+      e?.message ||
+      "更新失败";
+  } finally {
+    submitting.value = false;
+  }
 }
 
 /** FieldRow：左侧 label，右侧输入框（你要求字段不放在框里） */

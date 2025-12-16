@@ -127,3 +127,20 @@ class AdminUserWriteSerializer(serializers.ModelSerializer):
             instance.set_password(password)
         instance.save()
         return instance
+
+
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        data["user"] = {
+            "id": self.user.id,
+            "username": self.user.username,
+            "nickname": self.user.nickname,
+            "email": self.user.email,
+            "role": self.user.role,
+            "address": self.user.address,
+            "credit_score": self.user.credit_score,
+        }
+        return data

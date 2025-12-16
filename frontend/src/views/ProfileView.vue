@@ -47,6 +47,8 @@
               <InfoItem label="昵称" :value="profile.nickname || '-'" />
               <InfoItem label="邮箱" :value="profile.email || '-'" />
               <InfoItem label="手机号" :value="profile.phone || '-'" />
+              <InfoItem label="地址" :value="profile.address || '-'" />
+              <InfoItem label="信用分" :value="(profile.credit_score ?? '-').toString()" />
             </div>
 
             <div class="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -84,6 +86,7 @@
 <script setup lang="ts">
 import { defineComponent, h, onMounted, reactive, ref } from "vue";
 import EditProfileModal from "@/components/profile/EditProfileModal.vue";
+import http from "@/api/http";
 
 /** 你后端登录返回 user 里目前有：id/username/nickname/email/role
  * 这里扩展 phone/avatar 以便前端展示
@@ -95,6 +98,8 @@ type Profile = {
   email: string;
   phone: string;
   avatar: string;
+  address: string;
+  credit_score: number | null;
 };
 
 const fallbackAvatar =
@@ -107,6 +112,8 @@ const profile = reactive<Profile>({
   email: "",
   phone: "",
   avatar: "",
+  address: "",
+  credit_score: null,
 });
 
 const editOpen = ref(false);
@@ -120,25 +127,37 @@ function closeEdit() {
 
 /** 这里先做 mock：你接真实接口时，把 loadProfile / updateProfile 换成 http 请求即可 */
 async function loadProfile() {
-  // TODO: GET /api/auth/me/ 之类
-  // 先模拟来自 localStorage（你如果存了 user）
-  const raw = localStorage.getItem("user");
-  if (raw) {
-    const u = JSON.parse(raw);
-    profile.id = u.id ?? null;
-    profile.username = u.username ?? "";
-    profile.nickname = u.nickname ?? "";
-    profile.email = u.email ?? "";
-    profile.phone = u.phone ?? "";
-    profile.avatar = u.avatar ?? "";
-  } else {
-    // fallback mock
-    profile.id = 1;
-    profile.username = "user123";
-    profile.nickname = "chaos";
-    profile.email = "user@test.com";
-    profile.phone = "13800000000";
-    profile.avatar = "";
+  try {
+    const resp: any = await http.get("/api/auth/me");
+    const data: any = resp?.data ?? resp;
+    profile.id = data?.id ?? null;
+    profile.username = data?.username ?? "";
+    profile.nickname = data?.nickname ?? "";
+    profile.email = data?.email ?? "";
+    profile.phone = data?.phone ?? "";
+    profile.avatar = data?.avatar ?? "";
+    profile.address = data?.address ?? "";
+    profile.credit_score = data?.credit_score ?? null;
+
+    // keep local cache in sync
+    const cache = {
+      id: profile.id,
+      username: profile.username,
+      nickname: profile.nickname,
+      email: profile.email,
+      phone: profile.phone,
+      avatar: profile.avatar,
+      address: profile.address,
+      credit_score: profile.credit_score,
+    };
+    localStorage.setItem("user", JSON.stringify(cache));
+  } catch (e: any) {
+    const msg =
+      e?.response?.data?.detail ||
+      e?.response?.data?.error ||
+      e?.message ||
+      "获取个人信息失败";
+    alert(msg);
   }
 }
 
@@ -146,25 +165,30 @@ async function handleSubmit(payload: {
   nickname: string;
   email: string;
   phone: string;
+  address: string;
   password?: string; // 为空表示不修改
 }) {
-  // TODO: PUT/PATCH /api/auth/profile/
-  // 先本地更新
-  profile.nickname = payload.nickname;
-  profile.email = payload.email;
-  profile.phone = payload.phone;
-
-  // 同步 localStorage
-  const raw = localStorage.getItem("user");
-  const u = raw ? JSON.parse(raw) : {};
-  u.id = profile.id;
-  u.username = profile.username;
-  u.nickname = profile.nickname;
-  u.email = profile.email;
-  u.phone = profile.phone;
-  localStorage.setItem("user", JSON.stringify(u));
-
-  editOpen.value = false;
+  try {
+    const body: any = {
+      nickname: payload.nickname,
+      email: payload.email,
+      phone: payload.phone,
+      address: payload.address,
+    };
+    if (payload.password) body.password = payload.password;
+    await http.put("/api/auth/me", body);
+    editOpen.value = false;
+    await loadProfile();
+  } catch (e: any) {
+    const data = e?.response?.data;
+    const msg =
+      (typeof data === "string" && data) ||
+      data?.detail ||
+      data?.error ||
+      e?.message ||
+      "更新失败";
+    alert(msg);
+  }
 }
 
 onMounted(loadProfile);
