@@ -144,20 +144,78 @@
         <div class="flex items-center justify-end">
           <button
             class="px-8 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm hover:shadow disabled:opacity-50 disabled:cursor-not-allowed"
-            :disabled="true"
-            @click="handleBuy"
+            :disabled="!product?.id || buying"
+            @click="openBuyConfirm"
           >
-            {{ '立即购买（付款流程开发中）' }}
+            {{ buying ? '处理中…' : '立即购买' }}
           </button>
         </div>
       </div>
 
     </div>
+
+  <!-- 购买确认弹窗 -->
+  <div v-if="buyConfirmOpen" class="fixed inset-0 z-[60] flex items-center justify-center">
+    <div class="absolute inset-0 bg-black/40" @click="closeBuyConfirm"></div>
+    <div class="relative w-[92vw] max-w-md bg-white rounded-xl shadow-lg border border-neutral-200 p-6">
+      <h3 class="text-lg font-semibold text-neutral-800">是否确认购买该商品？</h3>
+      <p class="mt-2 text-neutral-600">
+        {{ productTitleText }}
+      </p>
+      <p class="mt-1 text-sm text-neutral-500">
+        价格：¥{{ productPriceText }}
+      </p>
+
+      <div class="mt-6 flex justify-end gap-3">
+        <button type="button" class="px-4 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-50" @click="closeBuyConfirm">
+          取消
+        </button>
+        <button type="button" class="px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed" :disabled="buying" @click="confirmBuy">
+          确认
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 跳转提示弹窗 -->
+  <div v-if="jumpingOpen" class="fixed inset-0 z-[70] flex items-center justify-center">
+    <div class="absolute inset-0 bg-black/40"></div>
+    <div class="relative w-[92vw] max-w-md bg-white rounded-xl shadow-lg border border-neutral-200 p-6">
+      <h3 class="text-lg font-semibold text-neutral-800">正在跳转…</h3>
+      <p class="mt-2 text-neutral-600">
+        即将前往订单中心开始付款
+      </p>
+      <p class="mt-1 text-sm text-neutral-500">
+        {{ jumpCountdown }} 秒后自动跳转
+      </p>
+
+      <div class="mt-6 flex justify-end">
+        <button type="button" class="px-4 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-50" @click="cancelJump">
+          取消跳转
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 购买失败提示弹窗 -->
+  <div v-if="buyErrorOpen" class="fixed inset-0 z-[80] flex items-center justify-center">
+    <div class="absolute inset-0 bg-black/40" @click="closeBuyError"></div>
+    <div class="relative w-[92vw] max-w-md bg-white rounded-xl shadow-lg border border-neutral-200 p-6">
+      <h3 class="text-lg font-semibold text-neutral-800">购买失败</h3>
+      <p class="mt-2 text-neutral-600 break-all">{{ buyErrorMsg }}</p>
+      <div class="mt-6 flex justify-end">
+        <button type="button" class="px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90" @click="closeBuyError">
+          知道了
+        </button>
+      </div>
+    </div>
+  </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import http from '@/api/http'
 import { getProductDetail } from '@/api/market'
 
@@ -175,26 +233,136 @@ const props = defineProps<{ product: any | null }>()
 const emit = defineEmits<{ (e: 'bought', payload: any): void }>()
 const buying = ref(false)
 
+const router = useRouter()
+
+const buyConfirmOpen = ref(false)
+const jumpingOpen = ref(false)
+const jumpCountdown = ref(5)
+
+const buyErrorOpen = ref(false)
+const buyErrorMsg = ref('')
+
+const openBuyError = (msg: string) => {
+  buyErrorMsg.value = msg || '购买失败'
+  buyErrorOpen.value = true
+  document.body.style.overflow = 'hidden'
+}
+
+const closeBuyError = () => {
+  buyErrorOpen.value = false
+  buyErrorMsg.value = ''
+  document.body.style.overflow = ''
+  // Return to market hall by closing the product modal
+  open.value = false
+}
+
+let jumpTimer: any = null
+let jumpInterval: any = null
+
+const productTitleText = computed(() => {
+  const p: any = product.value
+  return p?.title || p?.product_title || '未命名商品'
+})
+
+const productPriceText = computed(() => {
+  const p: any = product.value
+  return p?.selling_price || p?.product_selling_price || '-'
+})
+
+const openBuyConfirm = () => {
+  if (!product.value?.id || buying.value) return
+  buyConfirmOpen.value = true
+  document.body.style.overflow = 'hidden'
+}
+
+const closeBuyConfirm = () => {
+  buyConfirmOpen.value = false
+  if (!jumpingOpen.value && !buyErrorOpen.value) document.body.style.overflow = ''
+}
+
+const cancelJump = () => {
+  jumpingOpen.value = false
+  jumpCountdown.value = 5
+  if (jumpTimer) clearTimeout(jumpTimer)
+  if (jumpInterval) clearInterval(jumpInterval)
+  jumpTimer = null
+  jumpInterval = null
+  if (!buyErrorOpen.value) document.body.style.overflow = ''
+}
+
+const startJump = async (orderId: number | string) => {
+  jumpingOpen.value = true
+  jumpCountdown.value = 5
+
+  // Let OrderCenterView optionally auto-open the detail modal
+  try {
+    sessionStorage.setItem('orderCenter.openOrderId', String(orderId))
+  } catch {}
+
+  if (jumpInterval) clearInterval(jumpInterval)
+  jumpInterval = setInterval(() => {
+    jumpCountdown.value = Math.max(0, jumpCountdown.value - 1)
+  }, 1000)
+
+  if (jumpTimer) clearTimeout(jumpTimer)
+  jumpTimer = setTimeout(async () => {
+    cancelJump()
+
+    // Prefer existing route; fallback to a common path
+    const routes = router.getRoutes().map(r => r.path)
+    const targetPath = routes.includes('/orders')
+      ? '/orders'
+      : (routes.includes('/order-center') ? '/order-center' : '/orders')
+
+    await router.push({ path: targetPath, query: { order_id: String(orderId) } })
+
+    // Close product modal after navigation
+    open.value = false
+  }, 5000)
+}
+
+const confirmBuy = async () => {
+  if (!product.value?.id || buying.value) return
+  buying.value = true
+  try {
+    const res: any = await http.post('/api/market/orders/create_trade/', { product_id: product.value.id })
+    emit('bought', res)
+    closeBuyConfirm()
+
+    const oid = res?.order_id || res?.id
+    if (oid) {
+      await startJump(oid)
+    } else {
+      open.value = false
+      document.body.style.overflow = ''
+    }
+  } catch (e: any) {
+    // Extract backend error message
+    const data = e?.response?.data
+    const msg =
+      (typeof data === 'string' && data) ||
+      (data?.error ? String(data.error) : '') ||
+      (data?.detail ? String(data.detail) : '') ||
+      (e?.message ? String(e.message) : '') ||
+      '购买失败'
+
+    closeBuyConfirm()
+    cancelJump()
+    openBuyError(msg)
+  } finally {
+    buying.value = false
+  }
+}
+
+// legacy no-op (kept to avoid accidental template references)
+const handleBuy = async () => {}
+
 const detailLoading = ref(false)
 const detail = ref<any | null>(null)
 const detailError = ref<string | null>(null)
 
 // Use detail response when available, otherwise fall back to the passed-in list item
 const product = computed<any | null>(() => detail.value ?? props.product)
-
-const handleBuy = async () => {
-  if (!props.product?.id || buying.value) return
-  buying.value = true
-  try {
-    const res = await http.post('/api/market/orders/create_trade/', { product_id: props.product.id })
-    emit('bought', res)
-    open.value = false
-  } finally {
-    buying.value = false
-  }
-}
-
-const activeImgIndex = ref(0)
 
 watch(
   () => props.product?.id,
@@ -209,6 +377,10 @@ watch(
     if (!isOpen || !id) {
       detail.value = null
       detailError.value = null
+      buyConfirmOpen.value = false
+      cancelJump()
+      buyErrorOpen.value = false
+      buyErrorMsg.value = ''
       return
     }
 
@@ -225,6 +397,8 @@ watch(
   },
   { immediate: true }
 )
+
+const activeImgIndex = ref(0)
 
 const images = computed<string[]>(() => {
   const p: any = product.value

@@ -129,6 +129,59 @@ class OrderViewSet(ModelViewSet):
     def _is_terminal(self, status: str) -> bool:
         return status in {"completed", "refunded"}
 
+    def _status_view(self, status: str, perspective: str) -> str:
+        """Return UI-friendly status label depending on perspective.
+
+        perspective: 'buyer' | 'seller'
+        """
+        # Canonical states:
+        # pending_payment -> buyer: 待付款, seller: 待买家付款
+        # pending_shipment -> buyer: 待发货, seller: 待发货
+        # shipped -> buyer: 待收货, seller: 已发货
+        # completed -> 已完成
+        # refunded -> 已取消
+        if status == "pending_payment":
+            return "待付款" if perspective == "buyer" else "待买家付款"
+        if status == "pending_shipment":
+            return "待发货"
+        if status == "shipped":
+            return "待收货" if perspective == "buyer" else "已发货"
+        if status == "completed":
+            return "已完成"
+        if status == "refunded":
+            return "已取消"
+        # Backward compat
+        if status == "created":
+            return "待付款" if perspective == "buyer" else "待买家付款"
+        if status == "pending_receipt":
+            return "待收货" if perspective == "buyer" else "已发货"
+        if status == "received":
+            return "已完成"
+        return "未知状态"
+
+    def _attach_status_view(self, payload, perspective: str):
+        """Attach status_view to serializer output. Works for list/dict."""
+        if payload is None:
+            return payload
+        if isinstance(payload, list):
+            for item in payload:
+                if isinstance(item, dict):
+                    st = item.get("status")
+                    item["status_view"] = self._status_view(st, perspective)
+            return payload
+        if isinstance(payload, dict):
+            # paginated shape
+            if "results" in payload and isinstance(payload.get("results"), list):
+                for item in payload["results"]:
+                    if isinstance(item, dict):
+                        st = item.get("status")
+                        item["status_view"] = self._status_view(st, perspective)
+                return payload
+            st = payload.get("status")
+            payload["status_view"] = self._status_view(st, perspective)
+            return payload
+        return payload
+
     @action(detail=False, methods=["post"])
     def create_trade(self, request):
         """
@@ -139,14 +192,15 @@ class OrderViewSet(ModelViewSet):
             product_id = int(product_id)
             order = TradeService.create_order(request.user, product_id)
             # 初始为待付款
-            if getattr(order, "status", None) in (None, ""):
-                order.status = "created"
+            if getattr(order, "status", None) in (None, "", "created"):
+                order.status = "pending_payment"
                 order.save(update_fields=["status"])
             return Response(
                 {
                     "order_id": order.id,
                     "order_no": order.order_no,
-                    "status": order.status or "created",
+                    "status": order.status or "pending_payment",
+                    "status_view": self._status_view(order.status or "pending_payment", "buyer"),
                     "product_id": product_id,
                 }
             )
@@ -160,9 +214,13 @@ class OrderViewSet(ModelViewSet):
         page = self.paginate_queryset(qs)
         if page is not None:
             ser = self.get_serializer(page, many=True)
-            return self.get_paginated_response(ser.data)
+            resp = self.get_paginated_response(ser.data)
+            self._attach_status_view(resp.data, "buyer")
+            return resp
         ser = self.get_serializer(qs, many=True)
-        return Response(ser.data)
+        data = ser.data
+        self._attach_status_view(data, "buyer")
+        return Response(data)
 
     @action(detail=False, methods=["get"])
     def sell(self, request):
@@ -171,9 +229,13 @@ class OrderViewSet(ModelViewSet):
         page = self.paginate_queryset(qs)
         if page is not None:
             ser = self.get_serializer(page, many=True)
-            return self.get_paginated_response(ser.data)
+            resp = self.get_paginated_response(ser.data)
+            self._attach_status_view(resp.data, "seller")
+            return resp
         ser = self.get_serializer(qs, many=True)
-        return Response(ser.data)
+        data = ser.data
+        self._attach_status_view(data, "seller")
+        return Response(data)
 
     @action(detail=True, methods=["post"])
     def confirm_receipt(self, request, pk=None):
@@ -185,13 +247,13 @@ class OrderViewSet(ModelViewSet):
             if self._is_terminal(order.status):
                 return Response({"error": "order is terminal"}, status=400)
 
-            # 仅允许在待收货/已发货阶段确认收货
-            if order.status not in {"pending_receipt", "shipped"}:
+            # 仅允许在已发货阶段确认收货
+            if order.status not in {"shipped"}:
                 return Response({"error": "invalid status"}, status=400)
 
             order.status = "completed"
             order.save(update_fields=["status"])
-            return Response({"order_id": order.id, "status": order.status})
+            return Response({"order_id": order.id, "status": order.status, "status_view": self._status_view(order.status, "buyer")})
         except PermissionError:
             return Response({"error": "permission denied"}, status=403)
         except Exception as e:
@@ -199,7 +261,7 @@ class OrderViewSet(ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def pay(self, request, pk=None):
-        """买家付款 -> 状态：pending_receipt（待收货）"""
+        """买家付款 -> 状态：pending_shipment（待发货）"""
         try:
             order = self.get_object()
             self._ensure_buyer(order)
@@ -211,9 +273,9 @@ class OrderViewSet(ModelViewSet):
             if order.status not in {"pending_payment", "created"}:
                 return Response({"error": "invalid status"}, status=400)
 
-            order.status = "pending_receipt"
+            order.status = "pending_shipment"
             order.save(update_fields=["status"])
-            return Response({"order_id": order.id, "status": order.status})
+            return Response({"order_id": order.id, "status": order.status, "status_view": self._status_view(order.status, "buyer")})
         except PermissionError:
             return Response({"error": "permission denied"}, status=403)
         except Exception as e:
@@ -227,7 +289,7 @@ class OrderViewSet(ModelViewSet):
             self._ensure_buyer(order)
 
             if self._is_terminal(order.status):
-                return Response({"order_id": order.id, "status": order.status})
+                return Response({"order_id": order.id, "status": order.status, "status_view": self._status_view(order.status, "buyer")})
 
             # 允许在待付款阶段取消
             if order.status not in {"created", "pending_payment"}:
@@ -235,7 +297,7 @@ class OrderViewSet(ModelViewSet):
 
             order.status = "refunded"
             order.save(update_fields=["status"])
-            return Response({"order_id": order.id, "status": order.status})
+            return Response({"order_id": order.id, "status": order.status, "status_view": self._status_view(order.status, "buyer")})
         except PermissionError:
             return Response({"error": "permission denied"}, status=403)
         except Exception as e:
@@ -251,13 +313,13 @@ class OrderViewSet(ModelViewSet):
             if self._is_terminal(order.status):
                 return Response({"error": "order is terminal"}, status=400)
 
-            # 仅允许已付款后的订单发货
-            if order.status not in {"pending_receipt"}:
+            # 仅允许待发货的订单发货
+            if order.status not in {"pending_shipment"}:
                 return Response({"error": "invalid status"}, status=400)
 
             order.status = "shipped"
             order.save(update_fields=["status"])
-            return Response({"order_id": order.id, "status": order.status})
+            return Response({"order_id": order.id, "status": order.status, "status_view": self._status_view(order.status, "seller")})
         except PermissionError:
             return Response({"error": "permission denied"}, status=403)
         except Exception as e:
@@ -271,15 +333,15 @@ class OrderViewSet(ModelViewSet):
             self._ensure_buyer(order)
 
             if self._is_terminal(order.status):
-                return Response({"order_id": order.id, "status": order.status})
+                return Response({"order_id": order.id, "status": order.status, "status_view": self._status_view(order.status, "buyer")})
 
-            # 仅允许在待收货/已发货阶段退款
-            if order.status not in {"pending_receipt", "shipped"}:
+            # 仅允许在已发货阶段退款/取消收货
+            if order.status not in {"shipped"}:
                 return Response({"error": "invalid status"}, status=400)
 
             order.status = "refunded"
             order.save(update_fields=["status"])
-            return Response({"order_id": order.id, "status": order.status})
+            return Response({"order_id": order.id, "status": order.status, "status_view": self._status_view(order.status, "buyer")})
         except PermissionError:
             return Response({"error": "permission denied"}, status=403)
         except Exception as e:

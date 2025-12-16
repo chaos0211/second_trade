@@ -51,14 +51,14 @@
                 </div>
                 <div class="col-span-2">
                   <p class="text-neutral-400 text-sm">订单状态</p>
-                  <span class="badge-pill" :class="getStatusClass(o.status)">{{ getStatusText(o.status) }}</span>
+                  <span class="badge-pill" :class="getStatusClass(o.status)">{{ getOrderStatusText(o) }}</span>
                 </div>
 
                 <div class="col-span-2 flex justify-end flex-wrap gap-2 mt-2">
                   <button
                     v-for="btn in getActionButtons(o.status)"
                     :key="btn.action"
-                    class="btn"
+                    class="px-3 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-50 transition-colors"
                     :class="btn.className"
                     type="button"
                     :data-action="btn.action"
@@ -99,7 +99,7 @@
 
               <!-- 订单状态 -->
               <div class="col-span-2 text-left">
-                <span class="badge-pill" :class="getStatusClass(o.status)">{{ getStatusText(o.status) }}</span>
+                <span class="badge-pill" :class="getStatusClass(o.status)">{{ getOrderStatusText(o) }}</span>
               </div>
 
               <!-- 操作 -->
@@ -107,7 +107,7 @@
                 <button
                   v-for="btn in getActionButtons(o.status)"
                   :key="btn.action"
-                  class="btn"
+                  class="px-3 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-50 transition-colors"
                   :class="btn.className"
                   type="button"
                   :data-action="btn.action"
@@ -225,12 +225,13 @@ const formatPrice = (v: any) => {
   return String(v);
 };
 
-type Status = "pending_payment" | "pending_receipt" | "shipped" | "completed" | "refunded";
+type Status = "pending_payment" | "pending_shipment" | "pending_receipt" | "shipped" | "completed" | "refunded";
 
 type OrderItem = {
   id: number;
   order_no: string;
   status: Status;
+  statusView?: string;
   purchaseTime: string;
   purchasePrice: number;
   product: { id: number; title: string; specs: string; images: string[]; thumbnail: string };
@@ -306,6 +307,7 @@ function getStatusClass(status: Status) {
   switch (status) {
     case "pending_payment":
       return "bg-warning/10 text-warning";
+    case "pending_shipment":
     case "pending_receipt":
     case "shipped":
       return "bg-primary/10 text-primary";
@@ -321,6 +323,8 @@ function getStatusText(status: Status) {
   switch (status) {
     case "pending_payment":
       return "待付款";
+    case "pending_shipment":
+      return "待发货";
     case "pending_receipt":
       return "待收货";
     case "shipped":
@@ -328,25 +332,36 @@ function getStatusText(status: Status) {
     case "completed":
       return "已完成";
     case "refunded":
-      return "已退款";
+      return "已取消";
     default:
       return "未知状态";
   }
 }
+
+function getOrderStatusText(o: OrderItem) {
+  return o.statusView || getStatusText(o.status);
+}
+
 function getActionButtons(status: Status) {
   const buttons: { text: string; className: string; action: string }[] = [];
 
+  const primary = "border-primary bg-primary text-white hover:bg-primary/90";
+  const outlinePrimary = "border-primary text-primary hover:bg-primary/5";
+  const outlineDanger = "border-danger text-danger hover:bg-danger/5";
+
   if (props.tab === "bought") {
     if (status === "pending_payment") {
-      buttons.push({ text: "去支付", className: "btn-primary", action: "pay" });
+      buttons.push({ text: "去支付", className: outlinePrimary, action: "pay" });
     }
+    // 买家：已发货/待收货 才允许确认/退款
     if (status === "pending_receipt" || status === "shipped") {
-      buttons.push({ text: "确认收货", className: "btn-primary", action: "confirm" });
-      buttons.push({ text: "申请退款", className: "btn-secondary", action: "refund" });
+      buttons.push({ text: "确认收货", className: primary, action: "confirm" });
+      buttons.push({ text: "申请退款", className: outlineDanger, action: "refund" });
     }
   } else {
-    if (status === "pending_receipt") {
-      buttons.push({ text: "发货", className: "btn-primary", action: "ship" });
+    // 卖家知道已付款后的待发货状态
+    if (status === "pending_shipment") {
+      buttons.push({ text: "发货", className: primary, action: "ship" });
     }
   }
 

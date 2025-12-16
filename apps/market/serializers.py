@@ -68,6 +68,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     product_main_image = serializers.SerializerMethodField()
     product_selling_price = serializers.DecimalField(source="product.selling_price", max_digits=10, decimal_places=2, read_only=True)
     seller_id = serializers.IntegerField(source="product.seller_id", read_only=True)
+    seller_name = serializers.SerializerMethodField()
     buyer_address = serializers.CharField(source="buyer.address", read_only=True)
     seller_address = serializers.CharField(source="product.seller.address", read_only=True)
 
@@ -82,6 +83,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             "buyer_id",
             "buyer_address",
             "seller_id",
+            "seller_name",
             "seller_address",
             "product_id",
             "product_title",
@@ -96,6 +98,17 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             if not img:
                 return None
             return f"/media/products/{img.image_name}"
+        except Exception:
+            return None
+
+    def get_seller_name(self, obj):
+        try:
+            seller = obj.product.seller
+            # Prefer nickname (nick_name), then username
+            nick = getattr(seller, "nickname", None)
+            if nick:
+                return nick
+            return getattr(seller, "username", None)
         except Exception:
             return None
 
