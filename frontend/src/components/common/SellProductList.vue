@@ -4,7 +4,7 @@
     <div class="mb-6 flex flex-col md:flex-row md:items-center justify-between">
       <div>
         <h2 class="text-[clamp(1.5rem,3vw,2rem)] font-bold text-neutral-700">
-          我要卖机
+          卖家中心
         </h2>
         <p class="text-neutral-500 mt-1">管理您的二手电子产品销售</p>
       </div>

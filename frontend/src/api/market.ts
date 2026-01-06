@@ -180,6 +180,32 @@ export async function getProductDetail(productId: number): Promise<ProductDetail
 }
 
 // -------------------------
+// Device Models (reference)
+// -------------------------
+
+export type DeviceModelReferenceItem = {
+  id: number;
+  name: string;
+  brand_id: number;
+  brand_name?: string;
+  image_url?: string | null;
+  msrp_price?: string | number | null;
+  index_type?: string;
+};
+
+export async function getDeviceModelReference(params: {
+  category_id: number;
+  device_model_id: number;
+}): Promise<DeviceModelReferenceItem | null> {
+  const res = await http.get("/api/market/device-models/reference/", { params });
+  // 后端可能返回对象或列表；这里做兼容
+  const data = res.data;
+  if (!data) return null;
+  if (Array.isArray(data)) return (data[0] ?? null) as DeviceModelReferenceItem | null;
+  return data as DeviceModelReferenceItem;
+}
+
+// -------------------------
 // Brands
 // -------------------------
 

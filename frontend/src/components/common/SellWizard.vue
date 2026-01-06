@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import http from "@/api/http";
 import { initDraft, uploadDraftImages, analyzeDraft, estimateDraft, publishDraft } from "@/api/market";
 
@@ -22,12 +22,55 @@ const emit = defineEmits<{
   (e: "success", payload: any): void;
 }>();
 
+// 统一处理全站滚动锁：同时作用于 html/body，且可在卸载时兜底解锁
+const _scrollLock = {
+  locked: false,
+  bodyOverflow: "" as string,
+  htmlOverflow: "" as string,
+};
+
 function lockBodyScroll(lock: boolean) {
-  const cls = document?.body?.classList;
-  if (!cls) return;
-  if (lock) cls.add("overflow-hidden");
-  else cls.remove("overflow-hidden");
+  const body = document?.body;
+  const html = document?.documentElement;
+  if (!body || !html) return;
+
+  if (lock) {
+    if (_scrollLock.locked) return;
+    _scrollLock.locked = true;
+
+    // 记录原始 overflow，便于恢复
+    _scrollLock.bodyOverflow = body.style.overflow || "";
+    _scrollLock.htmlOverflow = html.style.overflow || "";
+
+    // Tailwind class + 兜底 style（避免某些情况下 class 不生效或被覆盖）
+    body.classList.add("overflow-hidden");
+    html.classList.add("overflow-hidden");
+    body.style.overflow = "hidden";
+    html.style.overflow = "hidden";
+  } else {
+    if (!_scrollLock.locked) {
+      // 仍然做一次兜底清理，防止残留
+      body.classList.remove("overflow-hidden");
+      html.classList.remove("overflow-hidden");
+      body.style.overflow = "";
+      html.style.overflow = "";
+      return;
+    }
+
+    _scrollLock.locked = false;
+    body.classList.remove("overflow-hidden");
+    html.classList.remove("overflow-hidden");
+
+    // 恢复原始 overflow
+    body.style.overflow = _scrollLock.bodyOverflow;
+    html.style.overflow = _scrollLock.htmlOverflow;
+  }
 }
+
+// 组件卸载兜底：即使路由跳转或父组件直接销毁，也要解锁滚动
+onBeforeUnmount(() => {
+  lockBodyScroll(false);
+});
 
 watch(
   () => props.open,
@@ -580,13 +623,6 @@ watch(
   () => {},
 );
 
-// 关闭弹窗时解锁滚动（确保 unmount 时也解锁）
-watch(
-  () => props.open,
-  (v) => {
-    if (!v) lockBodyScroll(false);
-  },
-);
 
 </script>
 

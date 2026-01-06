@@ -16,6 +16,7 @@ router.register(r"brands", BrandViewSet, basename="market-brand")
 
 urlpatterns = [
     path("valuation/", ValuationAPI.as_view(), name="valuation"),
+    path("device-models/reference/", DeviceModelViewSet.as_view({"get": "reference"}), name="device-model-reference"),
     path("", include(router.urls)),
     path("drafts/init/", DraftInitAPI.as_view()),
     path("drafts/<str:draft_key>/images/", DraftUploadImagesAPI.as_view()),

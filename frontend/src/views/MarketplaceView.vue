@@ -4,7 +4,7 @@
     <div v-if="!enteredCategoryId">
       <CategoryPicker
         :categories="categories"
-        title="选择二手电子产品分类"
+        title="选择电子产品分类"
         subtitle="先选择分类，再点击进入查看该分类下的商品"
         enter-text="点击进入"
         @select="onSelectCategory"

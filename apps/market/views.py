@@ -6,6 +6,7 @@ from rest_framework.decorators import action
 from django.core.exceptions import FieldError
 
 from .services import ValuationEngine, TradeService
+from apps.accounts.services.credit import apply_credit_event, can_trade
 from .models import Category, DeviceModel, Product, Order, Brand
 from .serializers import (
     ValuationRequestSerializer,
@@ -42,7 +43,12 @@ class ValuationAPI(APIView):
 class ProductViewSet(ModelViewSet):
     """商品上架与浏览接口"""
 
-    queryset = Product.objects.all()
+    queryset = Product.objects.select_related(
+        "seller",
+        "device_model",
+        "device_model__brand",
+        "device_model__brand__category",
+    ).all()
     serializer_class = ProductCreateSerializer
     permission_classes = [IsAuthenticated]
 
@@ -51,8 +57,50 @@ class ProductViewSet(ModelViewSet):
             return ProductListSerializer
         return ProductCreateSerializer
 
+    def retrieve(self, request, *args, **kwargs):
+        """商品详情：在原有序列化结果基础上，额外返回联查得到的类目/品牌/型号信息。
+
+        目的：前端 getProductDetail() 不需要再额外请求 category/device-model 等接口。
+        """
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        data = dict(serializer.data)
+
+        # device_model -> brand -> category
+        dm = getattr(instance, "device_model", None)
+        brand = getattr(dm, "brand", None) if dm is not None else None
+        category = getattr(brand, "category", None) if brand is not None else None
+
+        # 保留旧字段（若 serializer 已返回，则不覆盖）
+        # 同时补充更直观的 *_name 字段供前端直接展示
+        if "device_model_id" not in data and dm is not None:
+            data["device_model_id"] = dm.id
+        data["device_model_name"] = getattr(dm, "name", None)
+
+        if "brand_id" not in data and brand is not None:
+            data["brand_id"] = brand.id
+        data["brand_name"] = getattr(brand, "name", None)
+
+        if "category_id" not in data and category is not None:
+            data["category_id"] = category.id
+        data["category_name"] = getattr(category, "name", None)
+
+        # 参考价（DeviceModel.msrp/base_price）给详情页“商品参考”用
+        # 字段名不强绑定，尽量兼容已有模型字段
+        if dm is not None:
+            if "msrp_price" not in data:
+                data["msrp_price"] = getattr(dm, "msrp_price", None)
+            if data.get("msrp_price") in (None, "") and "base_price" not in data:
+                data["base_price"] = getattr(dm, "base_price", None)
+
+        return Response(data)
+
     def perform_create(self, serializer):
-        """上架时自动关联卖家用户。"""
+        """上架时自动关联卖家用户，并进行信用分门槛校验。"""
+        # 信用分 < 60：禁止买卖
+        if not can_trade(getattr(self.request.user, "credit_score", 0)):
+            return Response({"error": "信用分过低，无法上架"}, status=403)
+
         serializer.save(
             seller=self.request.user,
             status="on_sale",
@@ -192,6 +240,10 @@ class OrderViewSet(ModelViewSet):
     @action(detail=False, methods=["post"])
     def create_trade(self, request):
         """创建交易订单"""
+        # 信用分 < 60：禁止买卖
+        if not can_trade(getattr(request.user, "credit_score", 0)):
+            return Response({"error": "信用分过低，无法购买"}, status=403)
+
         product_id = request.data.get("product_id")
         try:
             product_id = int(product_id)
@@ -265,6 +317,25 @@ class OrderViewSet(ModelViewSet):
 
             order.status = "completed"
             order.save(update_fields=["status"])
+
+            # 订单完成：买家 +3，卖家 +3（幂等）
+            try:
+                apply_credit_event(
+                    user=request.user,
+                    event_type="order_completed",
+                    ref_type="order",
+                    ref_id=str(order.id),
+                )
+                apply_credit_event(
+                    user=order.product.seller,
+                    event_type="order_completed",
+                    ref_type="order",
+                    ref_id=str(order.id),
+                )
+            except Exception:
+                # 积分不影响主流程
+                pass
+
             return Response(
                 {
                     "order_id": order.id,
@@ -325,6 +396,18 @@ class OrderViewSet(ModelViewSet):
 
             order.status = "refunded"
             order.save(update_fields=["status"])
+
+            # 取消付款：取消者（买家） -3（幂等）
+            try:
+                apply_credit_event(
+                    user=request.user,
+                    event_type="payment_cancelled",
+                    ref_type="order",
+                    ref_id=str(order.id),
+                )
+            except Exception:
+                pass
+
             return Response(
                 {
                     "order_id": order.id,
@@ -385,6 +468,26 @@ class OrderViewSet(ModelViewSet):
 
             order.status = "refunded"
             order.save(update_fields=["status"])
+
+            # 退货退款：买家 -3，卖家 -1（幂等）
+            try:
+                apply_credit_event(
+                    user=request.user,
+                    event_type="order_refunded",
+                    party="buyer",
+                    ref_type="order",
+                    ref_id=str(order.id),
+                )
+                apply_credit_event(
+                    user=order.product.seller,
+                    event_type="order_refunded",
+                    party="seller",
+                    ref_type="order",
+                    ref_id=str(order.id),
+                )
+            except Exception:
+                pass
+
             return Response(
                 {
                     "order_id": order.id,
@@ -470,3 +573,42 @@ class DeviceModelViewSet(ModelViewSet):
                 return qs.none()
 
         return qs
+
+    @action(detail=False, methods=["get"], url_path="reference")
+    def reference(self, request):
+        """参考机型信息（用于商品详情页右侧“商品参考”扩展页）。
+
+        用法：
+        - GET /api/market/device-models/reference/?category_id=<cid>&device_model_id=<dm_id>
+
+        返回字段：name、brand_id、image_url、msrp_price
+        """
+        category_id = request.query_params.get("category_id")
+        device_model_id = request.query_params.get("device_model_id")
+
+        if not category_id or not device_model_id:
+            return Response({"error": "category_id and device_model_id are required"}, status=400)
+
+        try:
+            cid = int(str(category_id).strip())
+            dm_id = int(str(device_model_id).strip())
+        except Exception:
+            return Response({"error": "invalid category_id or device_model_id"}, status=400)
+
+        qs = (
+            DeviceModel.objects.select_related("brand", "brand__category")
+            .filter(id=dm_id, brand__category_id=cid)
+        )
+
+        dm = qs.first()
+        if dm is None:
+            return Response({"error": "not found"}, status=404)
+
+        payload = {
+            "id": dm.id,
+            "name": getattr(dm, "name", None),
+            "brand_id": getattr(dm, "brand_id", None),
+            "image_url": getattr(dm, "image_url", None),
+            "msrp_price": getattr(dm, "msrp_price", None),
+        }
+        return Response(payload)

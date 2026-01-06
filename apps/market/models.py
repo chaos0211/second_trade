@@ -36,15 +36,6 @@ class Brand(models.Model):
     """
     name = models.CharField(max_length=50)
     category = models.ForeignKey(Category, on_delete=models.CASCADE)
-    logo = models.URLField(
-        blank=True,
-        null=True,
-        help_text="品牌 Logo 地址（可选）",
-    )
-    description = models.TextField(
-        blank=True,
-        help_text="品牌介绍或备注说明",
-    )
 
     # 外部数据源入口（例如 ZOL 品牌列表页）
     list_url = models.URLField(
@@ -755,3 +746,58 @@ class Order(models.Model):
 
     def __str__(self):
         return self.order_no
+
+
+class CreditEvent(models.Model):
+    """信用积分变更明细（审计/追溯/幂等用）。
+
+    说明：
+    - 通过 ref_type + ref_id 关联到业务对象（如订单、商品、申诉等）
+    - 通过 (user, event_type, ref_type, ref_id) 唯一约束保证同一业务事件只记一次
+    """
+
+    EVENT_TYPES = (
+        ("order_completed", "订单完成"),
+        ("order_refunded", "订单退款/取消"),
+        ("payment_cancelled", "取消支付"),
+        ("late_shipment", "发货超时"),
+        ("dispute_lost", "纠纷判负"),
+        ("manual_adjust", "人工调整"),
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="credit_events",
+    )
+
+    event_type = models.CharField(max_length=32, choices=EVENT_TYPES)
+
+    # 本次变更分值（可正可负）
+    delta = models.IntegerField(default=0)
+
+    # 变更后的积分（冗余存储，便于审计；可在业务层写入）
+    score_after = models.IntegerField(null=True, blank=True)
+
+    # 业务关联（例如：Order/1、Product/3）
+    ref_type = models.CharField(max_length=32, blank=True, default="")
+    ref_id = models.CharField(max_length=64, blank=True, default="")
+
+    reason = models.CharField(max_length=255, blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user", "created_at"]),
+            models.Index(fields=["ref_type", "ref_id"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "event_type", "ref_type", "ref_id"],
+                name="uniq_credit_event_user_type_ref",
+            ),
+        ]
+
+    def __str__(self):
+        return f"CreditEvent(user_id={self.user_id}, type={self.event_type}, delta={self.delta})"

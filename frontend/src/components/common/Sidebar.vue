@@ -19,10 +19,10 @@
           alt="用户头像"
         />
         <div :class="collapsed ? 'hidden' : ''">
-          <h3 class="font-medium text-dark">张小明</h3>
+          <h3 class="font-medium text-dark">{{ displayName }}</h3>
           <div class="flex items-center text-xs text-dark-2">
-            <span class="inline-block w-2 h-2 rounded-full bg-success mr-1"></span>
-            <span>信用良好</span>
+            <span class="inline-block w-2 h-2 rounded-full mr-1" :class="creditDotClass"></span>
+            <span>{{ creditLabel }}</span>
           </div>
         </div>
       </div>
@@ -83,7 +83,7 @@ defineProps<{ collapsed: boolean }>();
 defineEmits<{ (e: "toggle"): void }>();
 
 const rawMenus = [
-  { icon: "fas fa-tag", text: "我要卖机", to: "/seller" },
+  { icon: "fas fa-tag", text: "卖家中心", to: "/seller" },
   { icon: "fas fa-shopping-cart", text: "订单中心", to: "/orders" },
   { icon: "fas fa-user-circle", text: "个人中心", to: "/profile" },
   { icon: "fas fa-cog", text: "系统管理", to: "/admin", adminOnly: true },
@@ -156,6 +156,69 @@ const isSuperuser = computed(() => {
   } catch {
     return false;
   }
+});
+
+const currentUser = computed(() => {
+  // try common storage keys in order
+  const u1 = parseMaybeJson(getStorageItem("user"));
+  if (u1) return u1;
+
+  const u2 = parseMaybeJson(getStorageItem("profile"));
+  if (u2) return u2;
+
+  const u3 = parseMaybeJson(getStorageItem("me"));
+  if (u3) return u3;
+
+  const auth = parseMaybeJson(getStorageItem("auth"));
+  const au = auth?.user ?? auth?.data?.user ?? null;
+  if (au) return au;
+
+  // fallback: decode token payload (may have username/user_id but usually not credit)
+  const access =
+    (parseMaybeJson(getStorageItem("access")) as any) ||
+    getStorageItem("access") ||
+    getStorageItem("access_token") ||
+    "";
+  const token = typeof access === "string" ? access : "";
+  if (token) return decodeJwtPayload(token);
+
+  return null;
+});
+
+const displayName = computed(() => {
+  const u: any = currentUser.value;
+  const name =
+    (typeof u?.nickname === "string" && u.nickname.trim()) ||
+    (typeof u?.name === "string" && u.name.trim()) ||
+    (typeof u?.username === "string" && u.username.trim()) ||
+    (typeof u?.account === "string" && u.account.trim()) ||
+    "用户";
+  return name;
+});
+
+const creditScore = computed<number | null>(() => {
+  const u: any = currentUser.value;
+  const raw = u?.credit_score ?? u?.creditScore ?? u?.credit;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+});
+
+const creditLabel = computed(() => {
+  const s = creditScore.value;
+  if (s === null) return "信用未知";
+  if (s <= 60) return "信用极差";
+  if (s <= 80) return "信用较差";
+  if (s <= 100) return "信用一般";
+  return "信用极好";
+});
+
+const creditDotClass = computed(() => {
+  const s = creditScore.value;
+  if (s === null) return "bg-gray-400";
+  if (s <= 60) return "bg-red-500";
+  if (s <= 80) return "bg-orange-500";
+  if (s <= 100) return "bg-yellow-500";
+  return "bg-green-500";
 });
 
 const menus = computed(() => {

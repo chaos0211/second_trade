@@ -4,8 +4,10 @@
     :class="open ? 'opacity-100 visible' : 'opacity-0 invisible'"
     @click.self="open = false"
   >
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col transform transition-all duration-300"
-         :class="open ? 'scale-100' : 'scale-95'">
+    <div class="flex items-stretch gap-4">
+      <!-- 详情页 -->
+      <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col transform transition-all duration-300"
+           :class="open ? 'scale-100' : 'scale-95'">
       <div class="p-6 border-b border-light-2 flex items-center justify-between">
         <h3 class="text-xl font-bold text-dark">商品详情</h3>
         <button class="text-dark-2 hover:text-dark transition-colors" @click="open = false">
@@ -72,15 +74,24 @@
             </div>
 
             <div class="rounded-xl border border-light-2 bg-white p-4">
-              <div class="text-sm font-semibold text-dark mb-3">商品信息</div>
+              <div class="flex items-center justify-between mb-3">
+                <div class="text-sm font-semibold text-dark">商品信息</div>
+                <button
+                  class="ml-2 px-3 py-1 rounded bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition"
+                  type="button"
+                  @click="onRefBtnClick"
+                >
+                  商品参考
+                </button>
+              </div>
               <div class="space-y-2 text-sm">
                 <div class="flex items-center justify-between">
                   <div class="text-dark-2">类别</div>
-                  <div class="text-dark">{{ product?.category_name ?? (product?.category?.name ?? (product?.category_id ? `类目#${product.category_id}` : '-')) }}</div>
+                  <div class="text-dark">{{ displayCategoryName }}</div>
                 </div>
-                <div class="flex items-center justify-between">
-                  <div class="text-dark-2">型号</div>
-                  <div class="text-dark">{{ product?.device_model_name ?? (product?.device_model?.name ?? (product?.device_model_id ? `型号#${product.device_model_id}` : '-')) }}</div>
+                <div class="grid grid-cols-[48px_1fr] items-start gap-3">
+                  <div class="text-dark-2 whitespace-nowrap">型号</div>
+                  <div class="text-dark text-right break-words">{{ displayDeviceModelName }}</div>
                 </div>
                 <div class="flex items-center justify-between">
                   <div class="text-dark-2">成色</div>
@@ -151,7 +162,35 @@
           </button>
         </div>
       </div>
+      </div>
 
+      <!-- 参考页 -->
+      <div
+        v-if="refOpen"
+        class="bg-white rounded-xl shadow-xl border border-light-2 p-4 w-[420px] max-h-[90vh] overflow-y-auto flex flex-col"
+      >
+        <div class="text-lg font-bold text-dark mb-4">商品参考</div>
+        <div v-if="refLoading" class="flex-1 flex items-center justify-center text-dark-2">加载中…</div>
+        <div v-else-if="refData" class="flex-1 flex flex-col">
+          <div class="w-full aspect-square bg-light-3 rounded-xl overflow-hidden flex items-center justify-center mb-4">
+            <img
+              v-if="refData?.image_url"
+              :src="toAbsUrl(refData.image_url)"
+              class="w-full h-full object-cover"
+              alt="ref"
+            />
+            <div v-else class="text-sm text-dark-2">暂无图片</div>
+          </div>
+          <div class="mb-3">
+            <div class="text-base font-semibold text-dark mb-2">{{ refData.name ?? '-' }}</div>
+            <div class="text-sm text-dark-2 mb-1">官方参考价</div>
+            <div class="text-lg text-primary font-bold mb-2">
+              {{ (refData.msrp_price !== null && refData.msrp_price !== undefined && String(refData.msrp_price).trim() !== '') ? `¥${refData.msrp_price}` : '暂无报价' }}
+            </div>
+          </div>
+        </div>
+        <div v-else class="flex-1 flex items-center justify-center text-dark-2">暂无参考数据</div>
+      </div>
     </div>
 
   <!-- 购买确认弹窗 -->
@@ -361,6 +400,48 @@ const detailLoading = ref(false)
 const detail = ref<any | null>(null)
 const detailError = ref<string | null>(null)
 
+// Resolved display names (avoid showing 类目#xxx / 型号#xxx)
+const resolvedCategoryName = ref<string>('')
+const resolvedDeviceModelName = ref<string>('')
+
+const displayCategoryName = computed(() => {
+  const p: any = product.value
+  return (
+    resolvedCategoryName.value ||
+    p?.category_name ||
+    p?.category?.name ||
+    (p?.category_id ? `类目#${p.category_id}` : '-')
+  )
+})
+
+const displayDeviceModelName = computed(() => {
+  const p: any = product.value
+  return (
+    resolvedDeviceModelName.value ||
+    p?.device_model_name ||
+    p?.device_model?.name ||
+    (p?.device_model_id ? `型号#${p.device_model_id}` : '-')
+  )
+})
+
+const fetchCategoryName = async (categoryId: number | string) => {
+  try {
+    const res: any = await http.get(`/api/market/categories/${categoryId}/`)
+    resolvedCategoryName.value = res?.name ? String(res.name) : ''
+  } catch {
+    resolvedCategoryName.value = ''
+  }
+}
+
+const fetchDeviceModelName = async (deviceModelId: number | string) => {
+  try {
+    const res: any = await http.get(`/api/market/device-models/${deviceModelId}/`)
+    resolvedDeviceModelName.value = res?.name ? String(res.name) : ''
+  } catch {
+    resolvedDeviceModelName.value = ''
+  }
+}
+
 // Use detail response when available, otherwise fall back to the passed-in list item
 const product = computed<any | null>(() => detail.value ?? props.product)
 
@@ -381,6 +462,9 @@ watch(
       cancelJump()
       buyErrorOpen.value = false
       buyErrorMsg.value = ''
+      // clear resolved names
+      resolvedCategoryName.value = ''
+      resolvedDeviceModelName.value = ''
       return
     }
 
@@ -388,9 +472,23 @@ watch(
     detailError.value = null
     try {
       detail.value = await getProductDetail(id)
+
+      // After detail loaded, resolve names by ID (when API doesn't embed names)
+      const p: any = detail.value
+      resolvedCategoryName.value = ''
+      resolvedDeviceModelName.value = ''
+
+      if (p?.category_id) {
+        await fetchCategoryName(p.category_id)
+      }
+      if (p?.device_model_id) {
+        await fetchDeviceModelName(p.device_model_id)
+      }
     } catch (e: any) {
       detail.value = null
       detailError.value = e?.message || '加载失败'
+      resolvedCategoryName.value = ''
+      resolvedDeviceModelName.value = ''
     } finally {
       detailLoading.value = false
     }
@@ -422,4 +520,41 @@ const images = computed<string[]>(() => {
 })
 
 const activeImage = computed(() => images.value[activeImgIndex.value] || '')
+
+// 商品参考页相关
+const refOpen = ref(false)
+const refLoading = ref(false)
+const refData = ref<any | null>(null)
+
+const onRefBtnClick = async () => {
+  refOpen.value = !refOpen.value
+
+  // close: do nothing
+  if (!refOpen.value) return
+
+  // open: fetch (always refresh for the currently selected product)
+  const p: any = product.value
+  const categoryId = p?.category_id
+  const deviceModelId = p?.device_model_id
+  if (!categoryId || !deviceModelId) {
+    refData.value = null
+    return
+  }
+
+  refLoading.value = true
+  try {
+    const res: any = await http.get(
+  `/api/market/device-models/reference/?category_id=${encodeURIComponent(String(categoryId))}&device_model_id=${encodeURIComponent(String(deviceModelId))}`
+)
+
+// axios wrapper 可能返回 payload 或 { data: payload }
+const payload = (res && typeof res === 'object' && 'data' in res) ? (res as any).data : res
+
+refData.value = payload
+  } catch (e) {
+    refData.value = null
+  } finally {
+    refLoading.value = false
+  }
+}
 </script>
