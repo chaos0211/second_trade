@@ -63,11 +63,13 @@ const loading = reactive({
 const errorMsg = ref<string>("");
 
 type MarketCategory = { id: number; name: string };
+type MarketBrand = { id: number; name: string; category_id: number };
 type MarketDeviceModel = { id: number; name: string; brand_id: number };
 
 const categoryOptions = ref<MarketCategory[]>([]);
+const brandOptions = ref<MarketBrand[]>([]);
 const modelOptions = ref<MarketDeviceModel[]>([]);
-const loadingOptions = reactive({ category: false, model: false });
+const loadingOptions = reactive({ category: false, brand: false, model: false });
 
 async function fetchCategories() {
   loadingOptions.category = true;
@@ -79,16 +81,48 @@ async function fetchCategories() {
   }
 }
 
-async function fetchModelsByCategory(categoryId: number) {
-  loadingOptions.model = true;
+async function fetchBrandsByCategory(categoryId: number) {
+  loadingOptions.brand = true;
   try {
-    // 尝试后端支持 brand_id 过滤；不支持则返回全量后前端过滤
-    const { data } = await http.get("/api/market/device-models/", { params: { brand_id: categoryId } });
+    const { data } = await http.get("/api/market/brands/", { params: { category_id: categoryId } });
     const arr = Array.isArray(data) ? data : (data?.results ?? []);
     const list = Array.isArray(arr) ? arr : [];
-    modelOptions.value = list.some((m) => Number(m.brand_id) !== categoryId)
-      ? list.filter((m) => Number(m.brand_id) === categoryId)
-      : list;
+
+    // 后端已按 category_id 过滤时，品牌项通常不会携带 category_id 字段。
+    // 只有在确实存在 category_id 字段时才做前端兜底过滤，否则直接使用返回列表。
+    const hasCategoryField = list.some((b) => (b as any).category_id !== undefined && (b as any).category_id !== null);
+    if (hasCategoryField) {
+      brandOptions.value = list.filter((b) => Number((b as any).category_id) === categoryId);
+    } else {
+      brandOptions.value = list;
+    }
+  } catch {
+    brandOptions.value = [];
+  } finally {
+    loadingOptions.brand = false;
+  }
+}
+
+async function fetchModelsByBrand(categoryId: number, brandId: number) {
+  loadingOptions.model = true;
+  try {
+    const { data } = await http.get("/api/market/device-models/", {
+      params: { category_id: categoryId, brand_id: brandId },
+    });
+
+    const arr = Array.isArray(data) ? data : (data?.results ?? []);
+    const list = Array.isArray(arr) ? arr : [];
+
+    // 永远前端兜底过滤，避免串数据（即使后端已过滤）
+    modelOptions.value = list.filter((m) => {
+      const bid = Number((m as any).brand_id);
+      const cid = Number((m as any).category_id);
+      // 后端若不返回 category_id，则只按 brand_id 过滤
+      if (Number.isFinite(cid) && cid > 0) {
+        return bid === brandId && cid === categoryId;
+      }
+      return bid === brandId;
+    });
   } catch {
     modelOptions.value = [];
   } finally {
@@ -103,6 +137,7 @@ onMounted(() => {
 // Step1 表单
 const form1 = reactive({
   category_id: "" as string | number,
+  brand_id: "" as string | number,
   device_model_id: "" as string | number,
   years_used: "" as string | number,
   original_price: "" as string | number,
@@ -112,9 +147,25 @@ watch(
   () => form1.category_id,
   (v) => {
     const cid = Number(String(v).trim());
+    // reset dependent fields/options
+    form1.brand_id = "";
+    form1.device_model_id = "";
+    brandOptions.value = [];
+    modelOptions.value = [];
+    if (Number.isFinite(cid) && cid > 0) fetchBrandsByCategory(cid);
+  },
+);
+
+watch(
+  () => form1.brand_id,
+  (v) => {
+    const bid = Number(String(v).trim());
     form1.device_model_id = "";
     modelOptions.value = [];
-    if (Number.isFinite(cid) && cid > 0) fetchModelsByCategory(cid);
+    const cid = Number(String(form1.category_id).trim());
+    if (Number.isFinite(cid) && cid > 0 && Number.isFinite(bid) && bid > 0) {
+      fetchModelsByBrand(cid, bid);
+    }
   },
 );
 
@@ -212,9 +263,13 @@ function resetAll() {
 
   // reset step1
   form1.category_id = "";
+  form1.brand_id = "";
   form1.device_model_id = "";
   form1.years_used = "";
   form1.original_price = "";
+
+  brandOptions.value = [];
+  modelOptions.value = [];
 
   // reset images
   files.value = [];
@@ -364,11 +419,13 @@ async function handleStartRecognize() {
   analyzeRes.value = null;
 
   const categoryId = Number(String(form1.category_id).trim());
+  const brandId = Number(String(form1.brand_id).trim());
   const modelId = Number(String(form1.device_model_id).trim());
   const yearsUsed = toNumber(form1.years_used);
   const originalPrice = toNumber(form1.original_price);
 
   if (!Number.isFinite(categoryId) || categoryId <= 0) return setError("请选择 category_id");
+  if (!Number.isFinite(brandId) || brandId <= 0) return setError("请选择 brand");
   if (!Number.isFinite(modelId) || modelId <= 0) return setError("请选择 device_model_id");
   if (!Number.isFinite(yearsUsed) || yearsUsed < 0) return setError("years_used 必须是 ≥0 的数字");
   if (!Number.isFinite(originalPrice) || originalPrice <= 0) return setError("original_price 必须是 >0 的数字");
@@ -595,21 +652,34 @@ watch(
         </div>
 
         <div>
-          <label class="block text-sm text-gray-600 mb-1">型号</label>
+          <label class="block text-sm text-gray-600 mb-1">品牌</label>
           <select
-            v-model="form1.device_model_id"
+            v-model="form1.brand_id"
             class="w-full rounded-lg border px-3 py-2 outline-none focus:ring bg-white"
-            :disabled="loadingOptions.model || !form1.category_id || isBusy"
+            :disabled="loadingOptions.brand || !form1.category_id || isBusy"
           >
-            <option value="" disabled>请选择型号</option>
-            <option v-for="m in modelOptions" :key="m.id" :value="m.id">{{ m.name }}</option>
+            <option value="" disabled>请选择品牌</option>
+            <option v-for="b in brandOptions" :key="b.id" :value="b.id">{{ b.name }}</option>
           </select>
           <div class="mt-1 text-xs text-gray-500" v-if="!form1.category_id">请先选择类目</div>
         </div>
 
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">型号</label>
+          <select
+            v-model="form1.device_model_id"
+            class="w-full rounded-lg border px-3 py-2 outline-none focus:ring bg-white"
+            :disabled="loadingOptions.model || !form1.category_id || !form1.brand_id || isBusy"
+          >
+            <option value="" disabled>请选择型号</option>
+            <option v-for="m in modelOptions" :key="m.id" :value="m.id">{{ m.name }}</option>
+          </select>
+          <div class="mt-1 text-xs text-gray-500" v-if="form1.category_id && !form1.brand_id">请先选择品牌</div>
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm text-gray-600 mb-1">years_used</label>
+            <label class="block text-sm text-gray-600 mb-1">使用年限</label>
             <input
               v-model="form1.years_used"
               class="w-full rounded-lg border px-3 py-2 outline-none focus:ring"
@@ -618,7 +688,7 @@ watch(
             />
           </div>
           <div>
-            <label class="block text-sm text-gray-600 mb-1">original_price</label>
+            <label class="block text-sm text-gray-600 mb-1">购买价格</label>
             <input
               v-model="form1.original_price"
               class="w-full rounded-lg border px-3 py-2 outline-none focus:ring"
@@ -735,7 +805,7 @@ watch(
             </div>
 
             <div class="rounded-lg border p-4">
-              <div class="text-sm text-gray-500 mb-2">瑕疵（红色逐行展示）</div>
+              <div class="text-sm text-gray-500 mb-2">瑕疵</div>
               <div v-if="analyzeRes.defects.length" class="space-y-1">
                 <div
                   v-for="(d, i) in analyzeRes.defects"

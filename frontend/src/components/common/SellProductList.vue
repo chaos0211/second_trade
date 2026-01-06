@@ -33,85 +33,12 @@
       </div>
     </div>
 
-    <!-- 筛选与搜索 -->
-    <div class="bg-white rounded-xl shadow-card p-4 mb-6">
-      <div class="flex flex-col md:flex-row gap-4">
-        <div class="flex-1">
-          <div class="relative">
-            <input
-              v-model="localQuery"
-              type="text"
-              placeholder="搜索商品名称、型号..."
-              class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-neutral-300 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all"
-              @keyup.enter="doSearch()"
-            />
-            <i
-              class="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400"
-            ></i>
-          </div>
-        </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <select
-            v-model="localCategory"
-            class="border border-neutral-300 rounded-lg px-4 py-2.5 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none text-neutral-700 bg-white"
-            @change="doSearch()"
-          >
-            <option value="">所有分类</option>
-            <option value="phone">手机</option>
-            <option value="laptop">笔记本电脑</option>
-            <option value="tablet">平板电脑</option>
-            <option value="watch">智能手表</option>
-            <option value="headphones">耳机</option>
-          </select>
-
-          <select
-            v-model="localBrand"
-            class="border border-neutral-300 rounded-lg px-4 py-2.5 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none text-neutral-700 bg-white"
-            @change="doSearch()"
-          >
-            <option value="">所有品牌</option>
-            <option value="apple">苹果</option>
-            <option value="huawei">华为</option>
-            <option value="xiaomi">小米</option>
-            <option value="samsung">三星</option>
-            <option value="oppo">OPPO</option>
-            <option value="vivo">vivo</option>
-          </select>
-
-          <select
-            v-model="localPriceRange"
-            class="border border-neutral-300 rounded-lg px-4 py-2.5 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none text-neutral-700 bg-white"
-            @change="doSearch()"
-          >
-            <option value="">价格区间</option>
-            <option value="0-500">0-500元</option>
-            <option value="500-1000">500-1000元</option>
-            <option value="1000-2000">1000-2000元</option>
-            <option value="2000-3000">2000-3000元</option>
-            <option value="3000+">3000元以上</option>
-          </select>
-
-          <select
-            v-model="localTimeRange"
-            class="border border-neutral-300 rounded-lg px-4 py-2.5 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none text-neutral-700 bg-white"
-            @change="doSearch()"
-          >
-            <option value="">上架时间</option>
-            <option value="today">今天</option>
-            <option value="week">本周</option>
-            <option value="month">本月</option>
-            <option value="quarter">本季度</option>
-            <option value="year">今年</option>
-          </select>
-        </div>
-      </div>
-    </div>
 
     <!-- 商品列表 -->
     <div class="bg-white rounded-xl shadow-card overflow-hidden">
       <div class="p-4 border-b border-neutral-200 flex justify-between items-center">
-        <h3 class="font-semibold text-neutral-700">我的上架中商品</h3>
+        <h3 class="font-semibold text-neutral-700">上架中商品</h3>
 
         <div class="flex items-center space-x-2">
           <span class="text-neutral-500 text-sm">排序:</span>

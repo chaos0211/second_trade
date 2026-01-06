@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokemon Team Builder</title>
+
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 引入 Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <style>
+        /* 针对像素风格图片的优化，防止模糊 */
+        .rendering-pixelated {
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+
+        /* 自定义滚动条样式（可选） */
+        body::-webkit-scrollbar {
+            width: 8px;
+        }
+        body::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        body::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        body::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="min-h-screen bg-gradient-to-br from-cyan-100 via-purple-100 to-blue-100 p-4 font-sans select-none flex flex-col items-center">
+
+        <!-- 标题 -->
+        <h1 class="text-4xl md:text-5xl font-extrabold text-purple-600 mb-8 mt-4 drop-shadow-sm text-center">
+          Let's Go, Vulpix!
+        </h1>
+
+        <!-- 卡片网格容器 -->
+        <!--
+             响应式逻辑:
+             手机: 每行2个 (grid-cols-2)
+             平板: 每行3个 (md:grid-cols-3)
+             小桌面: 每行4个 (lg:grid-cols-4)
+             大屏幕: 每行6个 (xl:grid-cols-6)
+        -->
+        <div class="w-full max-w-[1400px] grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 md:gap-6 mb-12">
+
+          <div
+            v-for="(pokemon, index) in team"
+            :key="pokemon.uniqueId"
+            @click="selectCard(index)"
+            class="relative group cursor-pointer transition-all duration-300 ease-out"
+            :class="[
+              selectedIndex === index ? 'z-10 scale-105' : 'hover:scale-102 hover:-translate-y-1'
+            ]"
+          >
+            <!-- 选中时的光标 (左侧箭头) -->
+            <div v-if="selectedIndex === index" class="absolute -left-3 top-1/2 -translate-y-1/2 w-0 h-0 border-t-[10px] border-t-transparent border-r-[12px] border-r-gray-600 border-b-[10px] border-b-transparent z-20 drop-shadow-md hidden md:block animate-pulse"></div>
+
+            <!-- 卡片主体 -->
+            <div
+              class="bg-white/80 backdrop-blur-md rounded-[2rem] p-3 shadow-lg border-2 transition-all duration-300 flex flex-col items-center justify-between h-[220px]"
+              :class="[
+                selectedIndex === index
+                  ? 'border-yellow-300 ring-4 ring-yellow-100 shadow-yellow-200/50'
+                  : 'border-white/50 hover:border-white hover:shadow-xl'
+              ]"
+            >
+
+              <!-- 顶部信息: 等级 & 性别 -->
+              <div class="w-full flex justify-between items-center text-sm font-bold px-2">
+                <span class="text-cyan-500">Lv. {{ pokemon.level }}</span>
+                <span v-if="pokemon.gender === 'female'" class="text-red-400 text-lg">♀</span>
+                <span v-else class="text-blue-500 text-lg">♂</span>
+              </div>
+
+              <!-- 图片区域 -->
+              <div class="relative w-24 h-24 flex items-center justify-center">
+                <!-- 背景淡色圆圈 -->
+                <div class="absolute inset-0 bg-gradient-to-b from-gray-100 to-gray-200 rounded-full opacity-50 scale-90"></div>
+                <!-- 宝可梦图片 -->
+                <img
+                  :src="getSpriteUrl(pokemon.pokedexId)"
+                  :alt="pokemon.name"
+                  class="relative z-10 w-full h-full object-contain rendering-pixelated"
+                />
+                <!-- 喜爱的心形图标 (满血时展示) -->
+                <div v-if="pokemon.currentHp === pokemon.maxHp" class="absolute bottom-2 right-2 text-pink-400 animate-bounce">
+                  ♥
+                </div>
+              </div>
+
+              <!-- 名字 -->
+              <div class="text-gray-700 font-bold text-lg -mt-2 truncate w-full text-center">
+                {{ pokemon.name }}
+              </div>
+
+              <!-- 血条区域 -->
+              <div class="w-full px-2 mb-1">
+                <div class="w-full h-3 bg-gray-200 rounded-full overflow-hidden border border-gray-300/50">
+                  <div
+                    class="h-full rounded-full transition-all duration-500 ease-out"
+                    :class="getHpColor(pokemon.currentHp, pokemon.maxHp)"
+                    :style="{ width: getHpWidth(pokemon.currentHp, pokemon.maxHp) }"
+                  ></div>
+                </div>
+                <div class="text-[10px] text-gray-400 text-center font-bold mt-1">
+                  {{ pokemon.currentHp }} / {{ pokemon.maxHp }}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- 底部操作区 -->
+        <div class="flex flex-col items-center gap-8 pb-12">
+          <!-- 按钮 -->
+          <button
+            @click="refreshTeam"
+            class="bg-white border-2 border-orange-200 text-gray-700 font-bold py-2 px-8 rounded-full shadow-md hover:bg-orange-50 hover:scale-105 active:scale-95 transition-all"
+          >
+            New Team
+          </button>
+
+          <!-- Logo -->
+          <div class="relative group cursor-default">
+             <img
+                src="https://upload.wikimedia.org/wikipedia/commons/9/98/International_Pok%C3%A9mon_logo.svg"
+                alt="Pokemon Logo"
+                class="h-20 drop-shadow-xl hover:scale-105 transition-transform duration-300"
+             />
+          </div>
+        </div>
+
+      </div>
+</div>
+
+<script>
+    const { createApp, ref, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            // --- 数据模型与模拟数据生成 ---
+            const pokemonPool = [
+                { id: 25, name: 'Sparky', species: 'Pikachu', type: 'electric' },
+                { id: 133, name: 'Eevee', species: 'Eevee', type: 'normal' },
+                { id: 37, name: 'Vulpix', species: 'Vulpix', type: 'fire' },
+                { id: 93, name: 'Haunter', species: 'Haunter', type: 'ghost' },
+                { id: 6, name: 'Charizard', species: 'Charizard', type: 'fire' },
+                { id: 151, name: 'Mew', species: 'Mew', type: 'psychic' },
+                { id: 1, name: 'Bulbasaur', species: 'Bulbasaur', type: 'grass' },
+                { id: 4, name: 'Charmander', species: 'Charmander', type: 'fire' },
+                { id: 7, name: 'Squirtle', species: 'Squirtle', type: 'water' },
+                { id: 143, name: 'Snorlax', species: 'Snorlax', type: 'normal' },
+                { id: 130, name: 'Gyarados', species: 'Gyarados', type: 'water' },
+                { id: 149, name: 'Dragonite', species: 'Dragonite', type: 'dragon' },
+                { id: 94, name: 'Gengar', species: 'Gengar', type: 'ghost' },
+                { id: 39, name: 'Jigglypuff', species: 'Jigglypuff', type: 'normal' },
+                { id: 54, name: 'Psyduck', species: 'Psyduck', type: 'water' },
+                { id: 129, name: 'Magikarp', species: 'Magikarp', type: 'water' },
+                { id: 132, name: 'Ditto', species: 'Ditto', type: 'normal' },
+                { id: 150, name: 'Mewtwo', species: 'Mewtwo', type: 'psychic' },
+            ];
+
+            const team = ref([]);
+            const selectedIndex = ref(2); // 默认选中第三个
+
+            // 生成随机整数
+            const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+            // 生成单个宝可梦卡片数据
+            const generatePokemon = (index) => {
+                const base = pokemonPool[index % pokemonPool.length];
+                const level = randomInt(5, 100);
+                // 简单的HP计算逻辑
+                const maxHp = Math.floor(level * 2.5 + randomInt(10, 50));
+                // 随机当前血量，模拟受伤
+                const currentHp = Math.floor(maxHp * (randomInt(20, 100) / 100));
+
+                return {
+                    uniqueId: index, // 唯一key
+                    pokedexId: base.id,
+                    name: base.name,
+                    speciesName: base.species,
+                    level: level,
+                    gender: Math.random() > 0.5 ? 'female' : 'male',
+                    maxHp,
+                    currentHp,
+                };
+            };
+
+            // 初始化 30 张卡片
+            const initTeam = () => {
+                const newTeam = [];
+                for (let i = 0; i < 30; i++) {
+                    newTeam.push(generatePokemon(i));
+                }
+                team.value = newTeam;
+            };
+
+            // 重新生成队伍
+            const refreshTeam = () => {
+                initTeam();
+                selectedIndex.value = 0;
+            };
+
+            // 选择卡片
+            const selectCard = (index) => {
+                selectedIndex.value = index;
+            };
+
+            // --- 辅助函数 ---
+
+            // 获取HP条颜色
+            const getHpColor = (current, max) => {
+                const ratio = current / max;
+                if (ratio > 0.5) return 'bg-green-500';
+                if (ratio > 0.2) return 'bg-yellow-400';
+                return 'bg-red-500';
+            };
+
+            // 获取HP条宽度百分比
+            const getHpWidth = (current, max) => {
+                return `${(current / max) * 100}%`;
+            };
+
+            // 获取图片URL (使用 PokeAPI 的官方 Sprite)
+            const getSpriteUrl = (id) => {
+                return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
+            };
+
+            onMounted(() => {
+                initTeam();
+            });
+
+            return {
+                team,
+                selectedIndex,
+                refreshTeam,
+                selectCard,
+                getHpColor,
+                getHpWidth,
+                getSpriteUrl
+            };
+        }
+    }).mount('#app');
+</script>
+
+</body>
+</html>

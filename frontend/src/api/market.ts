@@ -178,3 +178,22 @@ export async function getProductDetail(productId: number): Promise<ProductDetail
   const res = await http.get(`/api/market/products/${productId}/`);
   return res.data;
 }
+
+// -------------------------
+// Brands
+// -------------------------
+
+export type BrandItem = {
+  id: number;
+  name: string;
+  category_id?: number;
+};
+
+export async function listBrands(categoryId?: number): Promise<BrandItem[]> {
+  const params: any = {};
+  if (categoryId) {
+    params.category_id = categoryId;
+  }
+  const res = await http.get("/api/market/brands/", { params });
+  return res.data;
+}

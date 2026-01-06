@@ -2,7 +2,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
-from .views import ProductViewSet, OrderViewSet, ValuationAPI, CategoryViewSet, DeviceModelViewSet
+from .views import ProductViewSet, OrderViewSet, ValuationAPI, CategoryViewSet, DeviceModelViewSet, BrandViewSet
 from .views_listing import (
     DraftInitAPI, DraftUploadImagesAPI, DraftAnalyzeAPI, DraftEstimateAPI, DraftPublishAPI
 )
@@ -12,6 +12,7 @@ router.register(r"products", ProductViewSet, basename="product")
 router.register(r"orders", OrderViewSet, basename="order")
 router.register(r"categories", CategoryViewSet, basename="market-category")
 router.register(r"device-models", DeviceModelViewSet, basename="market-device-model")
+router.register(r"brands", BrandViewSet, basename="market-brand")
 
 urlpatterns = [
     path("valuation/", ValuationAPI.as_view(), name="valuation"),

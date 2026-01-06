@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.utils import timezone
 from zoneinfo import ZoneInfo
+from apps.market.models import Brand
 
 from .models import (
     Category,
@@ -17,6 +18,11 @@ from .models import (
 
 # --- market 下拉选项序列化器（给前端 Step1 使用） ---
 
+class BrandSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Brand
+        fields = ["id", "name"]
+
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
@@ -25,7 +31,7 @@ class CategorySerializer(serializers.ModelSerializer):
 
 class DeviceModelSerializer(serializers.ModelSerializer):
     # 前端用 brand_id 对接 category_id
-    brand_id = serializers.IntegerField(source="brand.category_id", read_only=True)
+    brand_id = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = DeviceModel

@@ -46,6 +46,18 @@ class Brand(models.Model):
         help_text="品牌介绍或备注说明",
     )
 
+    # 外部数据源入口（例如 ZOL 品牌列表页）
+    list_url = models.URLField(
+        blank=True,
+        null=True,
+        help_text="品牌列表页入口 URL（可选，用于爬虫/增量更新）",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["category", "name"], name="uniq_brand_category_name"),
+        ]
+
     def __str__(self):
         return f"{self.category.name} - {self.name}"
 
@@ -59,7 +71,9 @@ class DeviceModel(models.Model):
     base_price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        help_text="市场基准回收价（可根据官方或历史数据确定）",
+        null=True,
+        blank=True,
+        help_text="市场基准回收价（可根据官方或历史数据确定，可空）",
     )
     release_date = models.DateField(
         null=True,
@@ -84,6 +98,32 @@ class DeviceModel(models.Model):
         blank=True,
         null=True,
         help_text="官方产品介绍链接（可选）",
+    )
+
+    # --- 外部数据源字段（用于 CSV 入库与价格参考） ---
+    zol_sku_id = models.CharField(
+        max_length=32,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text="ZOL sku_id（唯一，用于导入去重/更新）",
+    )
+    msrp_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="参考价/标价（例如 ZOL 参考价）",
+    )
+    image_url = models.URLField(
+        blank=True,
+        null=True,
+        help_text="外部图片 URL（可选）",
+    )
+    detail_url = models.URLField(
+        blank=True,
+        null=True,
+        help_text="外部详情页 URL（可选）",
     )
 
     def __str__(self):
